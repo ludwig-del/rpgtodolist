@@ -1,0 +1,119 @@
+.landing {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 40%, #2a1800 0%, #0d0800 45%, #000000 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Ambient ring glow */
+.landing::before {
+  content: '';
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201,168,76,0.08) 0%, transparent 70%);
+  animation: ambientPulse 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes ambientPulse {
+  0%, 100% { transform: scale(1);   opacity: 0.6; }
+  50%       { transform: scale(1.1); opacity: 1;   }
+}
+
+.landing__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: center;
+  z-index: 1;
+}
+
+.landing__eyebrow {
+  font-family: var(--font-title);
+  font-size: 0.7rem;
+  letter-spacing: 0.55em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.landing__title {
+  font-family: var(--font-title);
+  font-size: clamp(3rem, 10vw, 6rem);
+  font-weight: 900;
+  color: var(--gold);
+  letter-spacing: 0.12em;
+  text-shadow:
+    0 0 40px rgba(201, 168, 76, 0.5),
+    0 0 80px rgba(201, 168, 76, 0.2);
+  line-height: 1;
+}
+
+.landing__subtitle {
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  font-style: italic;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+}
+
+.landing__divider {
+  width: 260px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  margin: 1.8rem 0 2rem;
+}
+
+/* The big play button */
+.landing__play-btn {
+  position: relative;
+  padding: 1.1rem 4rem;
+  background: linear-gradient(135deg, #1e1608 0%, #2e2210 50%, #1e1608 100%);
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  font-family: var(--font-title);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  cursor: pointer;
+  clip-path: polygon(
+    0 10px, 10px 0,
+    calc(100% - 10px) 0, 100% 10px,
+    100% calc(100% - 10px), calc(100% - 10px) 100%,
+    10px 100%, 0 calc(100% - 10px)
+  );
+  transition: color 0.3s, background 0.3s;
+  animation: btnGlow 2.5s ease-in-out infinite;
+}
+
+@keyframes btnGlow {
+  0%, 100% { box-shadow: 0 0 18px rgba(201,168,76,0.3), inset 0 0 15px rgba(201,168,76,0.05); }
+  50%       { box-shadow: 0 0 40px rgba(201,168,76,0.6), inset 0 0 25px rgba(201,168,76,0.12); }
+}
+
+.landing__play-btn:hover {
+  background: linear-gradient(135deg, #3a2c10 0%, #5a4318 50%, #3a2c10 100%);
+  color: var(--gold-light);
+  animation: none;
+  box-shadow: 0 0 50px rgba(201,168,76,0.7), inset 0 0 30px rgba(201,168,76,0.15);
+}
+
+.landing__play-btn:active {
+  transform: scale(0.97);
+}
+
+.landing__hint {
+  margin-top: 1.5rem;
+  font-family: var(--font-title);
+  font-size: 0.6rem;
+  letter-spacing: 0.3em;
+  color: #3a2f1e;
+  text-transform: uppercase;
+}
