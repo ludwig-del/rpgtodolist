@@ -1,4 +1,4 @@
-# Elden Ring — Daily Quest
+# RPG todolist — Daily Quest
 
 > A gamified daily Todo List application themed around Elden Ring.
 > Select a boss each day, complete your tasks to deal damage, and defeat the boss before the day ends.
