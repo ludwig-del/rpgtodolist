@@ -8,8 +8,6 @@ pipeline {
     }
 
     environment {
-        BACKEND_IMAGE   = "${params.DOCKERHUB_NAMESPACE}/eldenring-backend:${params.IMAGE_TAG}"
-        FRONTEND_IMAGE  = "${params.DOCKERHUB_NAMESPACE}/eldenring-frontend:${params.IMAGE_TAG}"
         KUBECONFIG_CRED = 'kubeconfig-prod'
     }
 
@@ -28,9 +26,23 @@ pipeline {
         stage('Validate Parameters') {
             steps {
                 script {
-                    if (!params.DOCKERHUB_NAMESPACE?.trim()) {
-                        error('DOCKERHUB_NAMESPACE is required.')
+                    def namespace = params.DOCKERHUB_NAMESPACE?.trim()
+                    if (!namespace) {
+                        def remoteUrl = scm.userRemoteConfigs[0]?.url ?: ''
+                        def matcher = (remoteUrl =~ /github\.com[:\/]([^\/]+)\//)
+                        if (matcher.find()) {
+                            namespace = matcher.group(1)
+                        }
                     }
+
+                    if (!namespace) {
+                        error('DOCKERHUB_NAMESPACE is required when it cannot be inferred from the SCM repository URL.')
+                    }
+
+                    env.DOCKERHUB_NAMESPACE_RESOLVED = namespace
+                    env.BACKEND_IMAGE = "${namespace}/eldenring-backend:${params.IMAGE_TAG}"
+                    env.FRONTEND_IMAGE = "${namespace}/eldenring-frontend:${params.IMAGE_TAG}"
+                    echo "Using Docker Hub namespace: ${namespace}"
                 }
             }
         }
