@@ -1,0 +1,31 @@
+---
+- name: Deploy frontend image to Kubernetes
+  hosts: deploy
+  gather_facts: false
+  vars:
+    kube_namespace: "eldenring"
+    deployment_name: "eldenring-frontend"
+    container_name: "frontend"
+  tasks:
+    - name: Update frontend deployment image
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - set
+          - image
+          - "deployment/{{ deployment_name }}"
+          - "{{ container_name }}={{ frontend_image }}"
+          - -n
+          - "{{ kube_namespace }}"
+          - --record
+
+    - name: Wait for frontend rollout
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - rollout
+          - status
+          - "deployment/{{ deployment_name }}"
+          - -n
+          - "{{ kube_namespace }}"
+          - --timeout=120s

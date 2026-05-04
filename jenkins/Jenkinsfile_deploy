@@ -1,0 +1,70 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'DOCKERHUB_NAMESPACE', defaultValue: '', description: 'Docker Hub username or organization.')
+        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Image tag to deploy for both services.')
+        string(name: 'K8S_NAMESPACE', defaultValue: 'eldenring', description: 'Kubernetes namespace for the application deployment.')
+    }
+
+    environment {
+        BACKEND_IMAGE   = "${params.DOCKERHUB_NAMESPACE}/eldenring-backend:${params.IMAGE_TAG}"
+        FRONTEND_IMAGE  = "${params.DOCKERHUB_NAMESPACE}/eldenring-frontend:${params.IMAGE_TAG}"
+        KUBECONFIG_CRED = 'kubeconfig-prod'
+    }
+
+    options {
+        timeout(time: 20, unit: 'MINUTES')
+        disableConcurrentBuilds()
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Validate Parameters') {
+            steps {
+                script {
+                    if (!params.DOCKERHUB_NAMESPACE?.trim()) {
+                        error('DOCKERHUB_NAMESPACE is required.')
+                    }
+                }
+            }
+        }
+
+        stage('Deploy Backend') {
+            steps {
+                withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
+                    sh '''
+                        ansible-playbook \
+                          -i ansible/backend/hosts.ini \
+                          ansible/backend/deploy_backend.yml \
+                          --extra-vars "backend_image=${BACKEND_IMAGE} kube_namespace=${K8S_NAMESPACE}"
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy Frontend') {
+            steps {
+                withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
+                    sh '''
+                        ansible-playbook \
+                          -i ansible/frontend/hosts.ini \
+                          ansible/frontend/deploy_frontend.yml \
+                          --extra-vars "frontend_image=${FRONTEND_IMAGE} kube_namespace=${K8S_NAMESPACE}"
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            deleteDir()
+        }
+    }
+}

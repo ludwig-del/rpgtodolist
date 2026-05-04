@@ -1,0 +1,83 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'DOCKERHUB_NAMESPACE', defaultValue: '', description: 'Docker Hub username or organization.')
+        booleanParam(name: 'PUSH_IMAGE', defaultValue: true, description: 'Build and push the backend image.')
+    }
+
+    environment {
+        REGISTRY      = 'https://index.docker.io/v1/'
+        IMAGE_NAME    = "${params.DOCKERHUB_NAMESPACE}/eldenring-backend"
+        IMAGE_TAG     = "${env.BUILD_NUMBER}-${env.GIT_COMMIT?.take(7) ?: 'local'}"
+        REGISTRY_CRED = 'registry-credentials'
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Validate Parameters') {
+            steps {
+                script {
+                    if (params.PUSH_IMAGE && !params.DOCKERHUB_NAMESPACE?.trim()) {
+                        error('DOCKERHUB_NAMESPACE is required when PUSH_IMAGE is enabled.')
+                    }
+                }
+            }
+        }
+
+        stage('Test Backend') {
+            agent {
+                docker {
+                    image 'python:3.12-slim'
+                    args '--user root'
+                }
+            }
+            steps {
+                dir('backend') {
+                    sh '''
+                        pip install -q -r requirements.txt pytest pytest-cov
+                        pytest tests/ -v --tb=short --junitxml=test-results.xml \
+                               --cov=app --cov-report=xml:coverage.xml
+                    '''
+                }
+            }
+            post {
+                always {
+                    junit 'backend/test-results.xml'
+                    archiveArtifacts artifacts: 'backend/coverage.xml', fingerprint: true, onlyIfSuccessful: false
+                }
+            }
+        }
+
+        stage('Build & Push Backend Image') {
+            when {
+                expression { params.PUSH_IMAGE }
+            }
+            steps {
+                script {
+                    docker.withRegistry(env.REGISTRY, REGISTRY_CRED) {
+                        def backendImg = docker.build("${IMAGE_NAME}:${IMAGE_TAG}", '-f backend/dockerfile backend')
+                        backendImg.push()
+                        backendImg.push('latest')
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            deleteDir()
+        }
+    }
+}
