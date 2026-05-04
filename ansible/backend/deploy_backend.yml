@@ -45,13 +45,33 @@
       ansible.builtin.command:
         argv:
           - kubectl
-          - set
-          - image
+          - patch
           - "deployment/{{ deployment_name }}"
-          - "{{ container_name }}={{ backend_image }}"
-          - "{{ init_container_name }}={{ backend_image }}"
           - -n
           - "{{ kube_namespace }}"
+          - --type=strategic
+          - -p
+          - |
+            {
+              "spec": {
+                "template": {
+                  "spec": {
+                    "containers": [
+                      {
+                        "name": "{{ container_name }}",
+                        "image": "{{ backend_image }}"
+                      }
+                    ],
+                    "initContainers": [
+                      {
+                        "name": "{{ init_container_name }}",
+                        "image": "{{ backend_image }}"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
 
     - name: Wait for backend rollout
       ansible.builtin.command:
