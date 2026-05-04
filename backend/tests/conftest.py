@@ -6,12 +6,11 @@ from app.models import Boss, User
 
 @pytest.fixture(scope="session")
 def app():
-    test_app = create_app("development")
-    test_app.config.update(
-        TESTING=True,
-        SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        JWT_SECRET_KEY="test-secret",
-    )
+    test_app = create_app("development", {
+        "TESTING": True,
+        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+        "JWT_SECRET_KEY": "test-secret",
+    })
     with test_app.app_context():
         _db.create_all()
         _seed_bosses()

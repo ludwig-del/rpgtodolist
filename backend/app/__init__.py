@@ -1,26 +1,31 @@
-import os
+from typing import Mapping, Any
 from flask import Flask
 from flask_cors import CORS
 from prometheus_flask_exporter import PrometheusMetrics
 
 from .config import config_map
-from .extensions import db, migrate
+from .extensions import db, jwt, migrate
 
 
-def create_app(config_name: str = "default") -> Flask:
+def create_app(config_name: str = "default", config_overrides: Mapping[str, Any] | None = None) -> Flask:
     app = Flask(__name__)
     app.config.from_object(config_map[config_name])
+    if config_overrides:
+        app.config.update(config_overrides)
 
     CORS(app, resources={r"/api/*": {"origins": "*"}})
 
     db.init_app(app)
     migrate.init_app(app, db)
+    jwt.init_app(app)
 
     PrometheusMetrics(app, path="/metrics")
 
+    from .routes.auth import auth_bp
     from .routes.daily import daily_bp
     from .routes.todo import todo_bp
 
+    app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(daily_bp, url_prefix="/api/daily")
     app.register_blueprint(todo_bp, url_prefix="/api/todo")
 
