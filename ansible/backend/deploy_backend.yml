@@ -7,39 +7,27 @@
     deployment_name: "eldenring-backend"
     container_name: "backend"
     init_container_name: "run-migrations"
-    repo_root: "{{ playbook_dir }}/../.."
   tasks:
-    - name: Ensure application namespace exists
+    - name: Ensure postgres is ready before backend rollout
       ansible.builtin.command:
         argv:
           - kubectl
-          - apply
-          - -f
-          - "{{ repo_root }}/k8s/namespace.yaml"
-
-    - name: Ensure shared configuration exists
-      ansible.builtin.command:
-        argv:
-          - kubectl
-          - apply
-          - -f
-          - "{{ repo_root }}/k8s/configmap.yaml"
-
-    - name: Ensure database resources exist
-      ansible.builtin.command:
-        argv:
-          - kubectl
-          - apply
-          - -f
-          - "{{ repo_root }}/k8s/postgres-statefulset.yaml"
+          - rollout
+          - status
+          - statefulset/postgres
+          - -n
+          - "{{ kube_namespace }}"
+          - --timeout=180s
 
     - name: Ensure backend deployment exists
       ansible.builtin.command:
         argv:
           - kubectl
-          - apply
-          - -f
-          - "{{ repo_root }}/k8s/backend-deployment.yaml"
+          - get
+          - deployment
+          - "{{ deployment_name }}"
+          - -n
+          - "{{ kube_namespace }}"
 
     - name: Update backend deployment image
       ansible.builtin.command:

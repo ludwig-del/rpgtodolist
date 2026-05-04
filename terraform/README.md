@@ -1,15 +1,34 @@
-# Terraform Scaffold
+# Terraform Deployment
 
-This repository keeps a `terraform/` directory to stay aligned with the ENG23 3074 PDF flow.
+This directory now contains the real Terraform configuration used by the Deploy pipeline.
 
-Current status:
+What Terraform provisions:
 
-- The real deploy flow is centered on Jenkins, Ansible, and Kubernetes.
-- Terraform is intentionally left as a scaffold so the repository structure stays close to the course template and example repository.
-- `jenkins/Jenkinsfile_deploy` skips the Terraform stage unless `terraform/main.tf` is added later.
+- Kubernetes namespace
+- Application ConfigMap and Secret
+- PostgreSQL StatefulSet and headless Service
+- Backend Deployment and NodePort Service
+- Frontend Deployment and NodePort Service
 
-If you decide to implement Terraform for real, add these files here:
+Deploy flow:
 
-- `main.tf`
-- `variables.tf`
-- `outputs.tf`
+1. Jenkins builds and tests the project
+2. Jenkins builds Docker images
+3. Jenkins runs Terraform from a `hashicorp/terraform` container to provision Kubernetes resources
+4. Jenkins runs Ansible playbooks to update deployment images and verify rollouts
+
+Example local validation:
+
+```bash
+docker run --rm \
+	-v "$PWD:/workspace" \
+	-v "$KUBECONFIG:/tmp/kubeconfig:ro" \
+	-w /workspace/terraform \
+	hashicorp/terraform:1.9.8 init
+
+docker run --rm \
+	-v "$PWD:/workspace" \
+	-v "$KUBECONFIG:/tmp/kubeconfig:ro" \
+	-w /workspace/terraform \
+	hashicorp/terraform:1.9.8 validate
+```

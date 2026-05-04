@@ -119,22 +119,91 @@ pipeline {
         stage('Terraform + Ansible') {
             steps {
                 withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
-                    script {
-                        if (fileExists('terraform/main.tf')) {
-                            if (sh(script: 'command -v terraform >/dev/null 2>&1', returnStatus: true) == 0) {
-                                sh '''
-                                    terraform -chdir=terraform init
-                                    terraform -chdir=terraform apply -auto-approve \
-                                      -var="namespace=${K8S_NAMESPACE}" \
-                                      -var="kubeconfig_path=${KUBECONFIG}"
-                                '''
-                            } else {
-                                echo 'Terraform configuration is present but terraform is not installed on this agent; skipping Terraform provision stage.'
-                            }
-                        } else {
-                            echo 'No terraform/main.tf found in this repository; skipping Terraform provision stage.'
-                        }
-                    }
+                    sh '''
+                        if [ ! -f terraform/main.tf ]; then
+                          echo 'No terraform/main.tf found in this repository.'
+                          exit 1
+                        fi
+
+                                                tf() {
+                                                    docker run --rm \
+                                                        -v "$PWD:/workspace" \
+                                                        -v "$KUBECONFIG:/tmp/kubeconfig:ro" \
+                                                        -w /workspace/terraform \
+                                                        hashicorp/terraform:1.9.8 "$@"
+                                                }
+
+                                                tf init
+
+                                                tf import -input=false \
+                                                    -var="namespace=${K8S_NAMESPACE}" \
+                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="backend_image=${BACKEND_IMAGE}" \
+                                                    -var="frontend_image=${FRONTEND_IMAGE}" \
+                                                    kubernetes_namespace_v1.app ${K8S_NAMESPACE} || true
+
+                                                tf import -input=false \
+                                                    -var="namespace=${K8S_NAMESPACE}" \
+                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="backend_image=${BACKEND_IMAGE}" \
+                                                    -var="frontend_image=${FRONTEND_IMAGE}" \
+                                                    kubernetes_config_map_v1.app ${K8S_NAMESPACE}/eldenring-config || true
+
+                                                tf import -input=false \
+                                                    -var="namespace=${K8S_NAMESPACE}" \
+                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="backend_image=${BACKEND_IMAGE}" \
+                                                    -var="frontend_image=${FRONTEND_IMAGE}" \
+                                                    kubernetes_secret_v1.app ${K8S_NAMESPACE}/eldenring-secrets || true
+
+                                                tf import -input=false \
+                                                    -var="namespace=${K8S_NAMESPACE}" \
+                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="backend_image=${BACKEND_IMAGE}" \
+                                                    -var="frontend_image=${FRONTEND_IMAGE}" \
+                                                    kubernetes_service_v1.postgres ${K8S_NAMESPACE}/postgres-svc || true
+
+                                                tf import -input=false \
+                                                    -var="namespace=${K8S_NAMESPACE}" \
+                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="backend_image=${BACKEND_IMAGE}" \
+                                                    -var="frontend_image=${FRONTEND_IMAGE}" \
+                                                    kubernetes_stateful_set_v1.postgres ${K8S_NAMESPACE}/postgres || true
+
+                                                tf import -input=false \
+                                                    -var="namespace=${K8S_NAMESPACE}" \
+                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="backend_image=${BACKEND_IMAGE}" \
+                                                    -var="frontend_image=${FRONTEND_IMAGE}" \
+                                                    kubernetes_deployment_v1.backend ${K8S_NAMESPACE}/eldenring-backend || true
+
+                                                tf import -input=false \
+                                                    -var="namespace=${K8S_NAMESPACE}" \
+                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="backend_image=${BACKEND_IMAGE}" \
+                                                    -var="frontend_image=${FRONTEND_IMAGE}" \
+                                                    kubernetes_service_v1.backend ${K8S_NAMESPACE}/eldenring-backend-svc || true
+
+                                                tf import -input=false \
+                                                    -var="namespace=${K8S_NAMESPACE}" \
+                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="backend_image=${BACKEND_IMAGE}" \
+                                                    -var="frontend_image=${FRONTEND_IMAGE}" \
+                                                    kubernetes_deployment_v1.frontend ${K8S_NAMESPACE}/eldenring-frontend || true
+
+                                                tf import -input=false \
+                                                    -var="namespace=${K8S_NAMESPACE}" \
+                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="backend_image=${BACKEND_IMAGE}" \
+                                                    -var="frontend_image=${FRONTEND_IMAGE}" \
+                                                    kubernetes_service_v1.frontend ${K8S_NAMESPACE}/eldenring-frontend-svc || true
+
+                                                tf apply -auto-approve \
+                                                    -var="namespace=${K8S_NAMESPACE}" \
+                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="backend_image=${BACKEND_IMAGE}" \
+                                                    -var="frontend_image=${FRONTEND_IMAGE}"
+                    '''
                 }
             }
         }

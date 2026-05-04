@@ -61,7 +61,10 @@ This application is a **Gamified Daily Todo List** inspired by Elden Ring. The c
 
 ```
 Eldenring Project/
-├── terraform/                      # Terraform scaffold kept for PDF alignment
+├── terraform/                      # Terraform provisioning for Kubernetes resources
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── outputs.tf
 │   └── README.md
 ├── ansible/                        # Ansible deployment playbooks
 │   ├── backend/
