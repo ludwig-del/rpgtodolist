@@ -317,7 +317,7 @@ pipeline {
 
     post {
         always {
-            node {
+            node(label: '') {
                 sh '''
                     docker run --rm \
                       --user 0:0 \
