@@ -51,7 +51,7 @@ This application is a **Gamified Daily Todo List** inspired by Elden Ring. The c
 | **Database** | PostgreSQL 16 |
 | **Containerization** | Docker, Docker Compose |
 | **CI/CD** | Jenkins Pipeline |
-| **Orchestration** | Kubernetes (Minikube), NodePort Service |
+| **Orchestration** | Kubernetes, Terraform, Ansible |
 | **Monitoring** | Prometheus, Grafana |
 | **Registry** | Docker Hub |
 
@@ -123,7 +123,7 @@ Eldenring Project/
 │   └── package.json
 ├── db/
 │   └── init.sql                    # Schema creation + boss seed data
-├── jenkins/                        # Optional split pipelines kept for reference/debug
+├── jenkins/                        # Jenkins pipelines used by backend/frontend/deploy jobs
 │   ├── Jenkinsfile_backend_build
 │   ├── Jenkinsfile_deploy
 │   └── Jenkinsfile_frontend_build
@@ -272,14 +272,21 @@ docker compose up --build
 
 ## Kubernetes Deployment
 
-### 1. Start Minikube
+The repository includes two deployment paths:
+
+1. `k8s/` manifests for direct `kubectl apply`
+2. `terraform/` + `ansible/` for the Jenkins deploy pipeline
+
+### 1. Prepare a Kubernetes Cluster
+
+Any local cluster that exposes NodePort services works. During validation this project was run on Docker Desktop Kubernetes.
 
 ```bash
-minikube start --driver=docker --cpus=2 --memory=4096
-minikube status
+kubectl cluster-info
+kubectl get nodes
 ```
 
-### 2. Apply Manifests
+### 2. Manual Manifest Deployment
 
 ```bash
 kubectl apply -f k8s/namespace.yaml
@@ -289,17 +296,22 @@ kubectl apply -f k8s/backend-deployment.yaml
 kubectl apply -f k8s/frontend-deployment.yaml
 ```
 
-### 3. Verify Pods
+### 3. Verify Resources
 
 ```bash
 kubectl get pods -n eldenring
 kubectl get services -n eldenring
+kubectl rollout status deployment/eldenring-backend -n eldenring
+kubectl rollout status deployment/eldenring-frontend -n eldenring
 ```
 
-### 4. Open the App
+### 4. Open the App Through NodePort
 
-```bash
-minikube service eldenring-frontend-svc -n eldenring
+For Docker Desktop Kubernetes you can open the services directly from the host:
+
+```text
+Frontend: http://localhost:30080
+Backend:  http://localhost:30500
 ```
 
 ### NodePort Reference
@@ -318,11 +330,12 @@ minikube service eldenring-frontend-svc -n eldenring
 ```
 Push to GitHub
     └── Webhook triggers Jenkins
-      ├── Stage 1: Checkout
-      ├── Stage 2: Build + Test
-      ├── Stage 3: Docker Build + Push Image
-      ├── Stage 4: Terraform + Ansible
-      └── Stage 5: Kubernetes Deploy
+  ├── Stage 1: Checkout
+  ├── Stage 2: Validate Parameters
+  ├── Stage 3: Build + Test
+  ├── Stage 4: Docker Build + Push Image
+  ├── Stage 5: Terraform + Ansible
+  └── Stage 6: Kubernetes Deploy
 ```
 
 The project keeps Jenkins pipelines under `jenkins/` so you can run separate backend, frontend, or deploy jobs.
@@ -352,9 +365,9 @@ Required Jenkins credentials:
 
 Terraform requirement:
 
-- The repository keeps a `terraform/` scaffold so the top-level structure stays close to the PDF flow.
-- The current working deploy path is still Jenkins -> Ansible -> Kubernetes.
-- If `terraform/main.tf` is added later, the pipeline can run `terraform init` and `terraform apply` before the Kubernetes deploy stages.
+- The repository contains a real `terraform/` implementation that provisions the namespace, config, secret, PostgreSQL StatefulSet, and frontend/backend services and deployments.
+- Jenkins runs Terraform inside `hashicorp/terraform:1.9.8`, then runs Ansible playbooks to patch deployment images and verify rollouts.
+- The deploy pipeline supports both Docker Hub images and local Docker Desktop images when `DOCKERHUB_NAMESPACE` is left blank.
 
 ### GitHub Webhook
 
@@ -362,7 +375,7 @@ Terraform requirement:
 - **Content Type:** `application/json`
 - **Trigger:** Push event
 
-Every push to the `main` branch automatically triggers the full pipeline.
+Every push to the branch configured in the Jenkins job triggers the full pipeline. In the current validation setup, the deploy job reads `jenkins/Jenkinsfile_deploy` from branch `sun`.
 
 ---
 
