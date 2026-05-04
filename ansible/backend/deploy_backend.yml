@@ -6,7 +6,40 @@
     kube_namespace: "eldenring"
     deployment_name: "eldenring-backend"
     container_name: "backend"
+    repo_root: "{{ playbook_dir }}/../.."
   tasks:
+    - name: Ensure application namespace exists
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - apply
+          - -f
+          - "{{ repo_root }}/infrastructure/k8s/namespace.yaml"
+
+    - name: Ensure shared configuration exists
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - apply
+          - -f
+          - "{{ repo_root }}/infrastructure/k8s/configmap.yaml"
+
+    - name: Ensure database resources exist
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - apply
+          - -f
+          - "{{ repo_root }}/infrastructure/k8s/postgres-statefulset.yaml"
+
+    - name: Ensure backend deployment exists
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - apply
+          - -f
+          - "{{ repo_root }}/infrastructure/k8s/backend-deployment.yaml"
+
     - name: Update backend deployment image
       ansible.builtin.command:
         argv:
@@ -17,7 +50,6 @@
           - "{{ container_name }}={{ backend_image }}"
           - -n
           - "{{ kube_namespace }}"
-          - --record
 
     - name: Wait for backend rollout
       ansible.builtin.command:

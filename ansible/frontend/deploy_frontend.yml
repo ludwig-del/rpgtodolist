@@ -6,7 +6,24 @@
     kube_namespace: "eldenring"
     deployment_name: "eldenring-frontend"
     container_name: "frontend"
+    repo_root: "{{ playbook_dir }}/../.."
   tasks:
+    - name: Ensure application namespace exists
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - apply
+          - -f
+          - "{{ repo_root }}/infrastructure/k8s/namespace.yaml"
+
+    - name: Ensure frontend deployment exists
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - apply
+          - -f
+          - "{{ repo_root }}/infrastructure/k8s/frontend-deployment.yaml"
+
     - name: Update frontend deployment image
       ansible.builtin.command:
         argv:
@@ -17,7 +34,6 @@
           - "{{ container_name }}={{ frontend_image }}"
           - -n
           - "{{ kube_namespace }}"
-          - --record
 
     - name: Wait for frontend rollout
       ansible.builtin.command:
