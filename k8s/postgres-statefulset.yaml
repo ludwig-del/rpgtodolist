@@ -52,7 +52,7 @@ metadata:
   name: postgres-svc
   namespace: eldenring
 spec:
-  clusterIP: None           # headless for StatefulSet DNS
+  clusterIP: None
   selector:
     app: postgres
   ports:

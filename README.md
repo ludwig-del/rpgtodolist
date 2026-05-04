@@ -61,6 +61,23 @@ This application is a **Gamified Daily Todo List** inspired by Elden Ring. The c
 
 ```
 Eldenring Project/
+├── terraform/                      # Terraform scaffold kept for PDF alignment
+│   └── README.md
+├── ansible/                        # Ansible deployment playbooks
+│   ├── backend/
+│   │   ├── deploy_backend.yml
+│   │   └── hosts.ini
+│   └── frontend/
+│       ├── deploy_frontend.yml
+│       └── hosts.ini
+├── k8s/                            # Kubernetes manifests
+│   ├── namespace.yaml
+│   ├── configmap.yaml
+│   ├── postgres-statefulset.yaml
+│   ├── backend-deployment.yaml
+│   └── frontend-deployment.yaml
+├── monitoring/
+│   └── prometheus.yml              # Prometheus scrape configuration
 ├── backend/                        # Flask REST API
 │   ├── app/
 │   │   ├── __init__.py             # App factory + CLI commands
@@ -100,18 +117,12 @@ Eldenring Project/
 │   └── package.json
 ├── db/
 │   └── init.sql                    # Schema creation + boss seed data
-├── infrastructure/
-│   └── k8s/                        # Kubernetes manifests
-│       ├── namespace.yaml
-│       ├── configmap.yaml
-│       ├── postgres-statefulset.yaml
-│       ├── backend-deployment.yaml  # NodePort 30500
-│       └── frontend-deployment.yaml # NodePort 30080
-├── monitoring/
-│   └── prometheus/
-│       └── prometheus.yml
+├── jenkins/                        # Optional split pipelines kept for reference/debug
+│   ├── Jenkinsfile_backend_build
+│   ├── Jenkinsfile_deploy
+│   └── Jenkinsfile_frontend_build
 ├── docker-compose.yml              # Full local stack
-└── Jenkinsfile                     # CI/CD pipeline definition
+└── README.md
 ```
 
 ---
@@ -265,11 +276,11 @@ minikube status
 ### 2. Apply Manifests
 
 ```bash
-kubectl apply -f infrastructure/k8s/namespace.yaml
-kubectl apply -f infrastructure/k8s/configmap.yaml
-kubectl apply -f infrastructure/k8s/postgres-statefulset.yaml
-kubectl apply -f infrastructure/k8s/backend-deployment.yaml
-kubectl apply -f infrastructure/k8s/frontend-deployment.yaml
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/postgres-statefulset.yaml
+kubectl apply -f k8s/backend-deployment.yaml
+kubectl apply -f k8s/frontend-deployment.yaml
 ```
 
 ### 3. Verify Pods
@@ -301,12 +312,14 @@ minikube service eldenring-frontend-svc -n eldenring
 ```
 Push to GitHub
     └── Webhook triggers Jenkins
-            ├── Stage 1: Checkout
-            ├── Stage 2: Test Backend (pytest)
-            ├── Stage 3: Test Frontend (npm test)
-            ├── Stage 4: Build & Push Docker Images to Docker Hub
-            └── Stage 5: kubectl set image → Rolling deploy to Kubernetes
+      ├── Stage 1: Checkout
+      ├── Stage 2: Build + Test
+      ├── Stage 3: Docker Build + Push Image
+      ├── Stage 4: Terraform + Ansible
+      └── Stage 5: Kubernetes Deploy
 ```
+
+The project keeps Jenkins pipelines under `jenkins/` so you can run separate backend, frontend, or deploy jobs.
 
 ### Jenkins Setup
 
@@ -318,12 +331,24 @@ docker run -d --name jenkins -p 8080:8080 \
   jenkins/jenkins:lts
 ```
 
+Pipeline script path:
+
+```text
+jenkins/Jenkinsfile_deploy
+```
+
 Required Jenkins credentials:
 
 | Credential ID | Type | Purpose |
 |--------------|------|---------|
 | `registry-credentials` | Username/Password | Docker Hub login |
 | `kubeconfig-prod` | Secret File | kubectl access to cluster |
+
+Terraform requirement:
+
+- The repository keeps a `terraform/` scaffold so the top-level structure stays close to the PDF flow.
+- The current working deploy path is still Jenkins -> Ansible -> Kubernetes.
+- If `terraform/main.tf` is added later, the pipeline can run `terraform init` and `terraform apply` before the Kubernetes deploy stages.
 
 ### GitHub Webhook
 
@@ -340,6 +365,12 @@ Every push to the `main` branch automatically triggers the full pipeline.
 ### Prometheus
 
 The backend exposes metrics at `/metrics` via `prometheus-flask-exporter`. Prometheus scrapes this endpoint automatically.
+
+Prometheus config path:
+
+```text
+monitoring/prometheus.yml
+```
 
 ```bash
 # View raw metrics

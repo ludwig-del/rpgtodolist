@@ -14,7 +14,7 @@
           - kubectl
           - apply
           - -f
-          - "{{ repo_root }}/infrastructure/k8s/namespace.yaml"
+          - "{{ repo_root }}/k8s/namespace.yaml"
 
     - name: Ensure frontend deployment exists
       ansible.builtin.command:
@@ -22,7 +22,7 @@
           - kubectl
           - apply
           - -f
-          - "{{ repo_root }}/infrastructure/k8s/frontend-deployment.yaml"
+          - "{{ repo_root }}/k8s/frontend-deployment.yaml"
 
     - name: Update frontend deployment image
       ansible.builtin.command:

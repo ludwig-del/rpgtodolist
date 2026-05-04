@@ -15,7 +15,7 @@
           - kubectl
           - apply
           - -f
-          - "{{ repo_root }}/infrastructure/k8s/namespace.yaml"
+          - "{{ repo_root }}/k8s/namespace.yaml"
 
     - name: Ensure shared configuration exists
       ansible.builtin.command:
@@ -23,7 +23,7 @@
           - kubectl
           - apply
           - -f
-          - "{{ repo_root }}/infrastructure/k8s/configmap.yaml"
+          - "{{ repo_root }}/k8s/configmap.yaml"
 
     - name: Ensure database resources exist
       ansible.builtin.command:
@@ -31,7 +31,7 @@
           - kubectl
           - apply
           - -f
-          - "{{ repo_root }}/infrastructure/k8s/postgres-statefulset.yaml"
+          - "{{ repo_root }}/k8s/postgres-statefulset.yaml"
 
     - name: Ensure backend deployment exists
       ansible.builtin.command:
@@ -39,7 +39,7 @@
           - kubectl
           - apply
           - -f
-          - "{{ repo_root }}/infrastructure/k8s/backend-deployment.yaml"
+          - "{{ repo_root }}/k8s/backend-deployment.yaml"
 
     - name: Update backend deployment image
       ansible.builtin.command:
