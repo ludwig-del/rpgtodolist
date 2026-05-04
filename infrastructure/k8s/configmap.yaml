@@ -5,7 +5,7 @@ metadata:
   namespace: eldenring
 data:
   FLASK_ENV:    "production"
-  DATABASE_URL: "postgresql://eldenring:eldenring@postgres-svc:5432/eldenring_todo"
+  DATABASE_URL: "postgresql://eldenring:REPLACE_WITH_DB_PASSWORD@postgres-svc:5432/eldenring_todo"
 ---
 apiVersion: v1
 kind: Secret

@@ -23,6 +23,7 @@ spec:
       containers:
         - name: frontend
           image: YOUR_DOCKERHUB_USERNAME/eldenring-frontend:latest  # updated by Jenkins
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
           readinessProbe:

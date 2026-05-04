@@ -6,6 +6,7 @@
     kube_namespace: "eldenring"
     deployment_name: "eldenring-backend"
     container_name: "backend"
+    init_container_name: "run-migrations"
     repo_root: "{{ playbook_dir }}/../.."
   tasks:
     - name: Ensure application namespace exists
@@ -48,6 +49,7 @@
           - image
           - "deployment/{{ deployment_name }}"
           - "{{ container_name }}={{ backend_image }}"
+          - "{{ init_container_name }}={{ backend_image }}"
           - -n
           - "{{ kube_namespace }}"
 

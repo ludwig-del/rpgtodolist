@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'DOCKERHUB_NAMESPACE', defaultValue: '', description: 'Docker Hub username or organization.')
+        string(name: 'DOCKERHUB_NAMESPACE', defaultValue: '', description: 'Optional Docker Hub username or organization. Leave blank to deploy local images on Docker Desktop Kubernetes.')
         string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Image tag to deploy for both services.')
         string(name: 'K8S_NAMESPACE', defaultValue: 'eldenring', description: 'Kubernetes namespace for the application deployment.')
     }
@@ -27,22 +27,18 @@ pipeline {
             steps {
                 script {
                     def namespace = params.DOCKERHUB_NAMESPACE?.trim()
-                    if (!namespace) {
-                        def remoteUrl = scm.userRemoteConfigs[0]?.url ?: ''
-                        def matcher = (remoteUrl =~ /github\.com[:\/]([^\/]+)\//)
-                        if (matcher.find()) {
-                            namespace = matcher.group(1)
-                        }
-                    }
 
-                    if (!namespace) {
-                        error('DOCKERHUB_NAMESPACE is required when it cannot be inferred from the SCM repository URL.')
+                    if (namespace) {
+                        env.DOCKERHUB_NAMESPACE_RESOLVED = namespace
+                        env.BACKEND_IMAGE = "${namespace}/rpgtodolist-backend:${params.IMAGE_TAG}"
+                        env.FRONTEND_IMAGE = "${namespace}/rpgtodolist-frontend:${params.IMAGE_TAG}"
+                        echo "Using Docker Hub namespace: ${namespace}"
+                    } else {
+                        env.DOCKERHUB_NAMESPACE_RESOLVED = ''
+                        env.BACKEND_IMAGE = "rpgtodolist-backend:${params.IMAGE_TAG}"
+                        env.FRONTEND_IMAGE = "rpgtodolist-frontend:${params.IMAGE_TAG}"
+                        echo 'Using local Kubernetes images from the Docker Desktop image cache.'
                     }
-
-                    env.DOCKERHUB_NAMESPACE_RESOLVED = namespace
-                    env.BACKEND_IMAGE = "${namespace}/rpgtodolist-backend:${params.IMAGE_TAG}"
-                    env.FRONTEND_IMAGE = "${namespace}/rpgtodolist-frontend:${params.IMAGE_TAG}"
-                    echo "Using Docker Hub namespace: ${namespace}"
                 }
             }
         }

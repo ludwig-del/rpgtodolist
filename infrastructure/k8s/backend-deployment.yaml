@@ -27,6 +27,7 @@ spec:
       initContainers:
         - name: run-migrations
           image: YOUR_DOCKERHUB_USERNAME/eldenring-backend:latest  # updated by Jenkins
+          imagePullPolicy: IfNotPresent
           command: ["flask", "db", "upgrade"]
           envFrom:
             - configMapRef:
@@ -36,6 +37,7 @@ spec:
       containers:
         - name: backend
           image: YOUR_DOCKERHUB_USERNAME/eldenring-backend:latest  # updated by Jenkins
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5000
           envFrom:
