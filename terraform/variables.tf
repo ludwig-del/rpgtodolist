@@ -24,7 +24,7 @@ variable "frontend_image" {
 variable "postgres_password" {
   description = "PostgreSQL password shared by the database secret and app DATABASE_URL."
   type        = string
-  default     = "eldenring"
+  default     = "REPLACE_WITH_DB_PASSWORD"
   sensitive   = true
 }
 
