@@ -12,16 +12,30 @@ pipeline {
         REGISTRY_CRED = 'registry-credentials'
         KUBECONFIG_CRED = 'kubeconfig-prod'
         TF_IN_AUTOMATION = 'true'
+        TF_PLUGIN_CACHE_DIR = '/tmp/terraform-plugin-cache'
     }
 
     options {
         timeout(time: 20, unit: 'MINUTES')
         disableConcurrentBuilds()
+        skipDefaultCheckout(true)
     }
 
     stages {
         stage('Checkout') {
             steps {
+                sh '''
+                                        docker run --rm \
+                                            --user 0:0 \
+                                            --volumes-from "$HOSTNAME" \
+                                            -w "$WORKSPACE" \
+                                            alpine:3.20 sh -c 'rm -rf terraform/.terraform || true'
+
+                    if [ -d terraform/.terraform ]; then
+                      chmod -R u+w terraform/.terraform || true
+                      rm -rf terraform/.terraform || true
+                    fi
+                '''
                 checkout scm
             }
         }
@@ -120,18 +134,26 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
                     sh '''
+                        mkdir -p "${TF_PLUGIN_CACHE_DIR}"
+
                         if [ ! -f terraform/main.tf ]; then
                           echo 'No terraform/main.tf found in this repository.'
                           exit 1
                         fi
 
                                                 docker run --rm \
+                                                    --user "$(id -u):$(id -g)" \
                                                     --volumes-from "$HOSTNAME" \
+                                                    -e TF_IN_AUTOMATION="${TF_IN_AUTOMATION}" \
+                                                    -e TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR}" \
                                                     -w "$PWD/terraform" \
                                                     hashicorp/terraform:1.9.8 init
 
                                                 docker run --rm \
+                                                    --user "$(id -u):$(id -g)" \
                                                     --volumes-from "$HOSTNAME" \
+                                                    -e TF_IN_AUTOMATION="${TF_IN_AUTOMATION}" \
+                                                    -e TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR}" \
                                                     -w "$PWD/terraform" \
                                                     hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
@@ -141,7 +163,10 @@ pipeline {
                                                     kubernetes_namespace_v1.app ${K8S_NAMESPACE} || true
 
                                                 docker run --rm \
+                                                    --user "$(id -u):$(id -g)" \
                                                     --volumes-from "$HOSTNAME" \
+                                                    -e TF_IN_AUTOMATION="${TF_IN_AUTOMATION}" \
+                                                    -e TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR}" \
                                                     -w "$PWD/terraform" \
                                                     hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
@@ -151,7 +176,10 @@ pipeline {
                                                     kubernetes_config_map_v1.app ${K8S_NAMESPACE}/eldenring-config || true
 
                                                 docker run --rm \
+                                                    --user "$(id -u):$(id -g)" \
                                                     --volumes-from "$HOSTNAME" \
+                                                    -e TF_IN_AUTOMATION="${TF_IN_AUTOMATION}" \
+                                                    -e TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR}" \
                                                     -w "$PWD/terraform" \
                                                     hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
@@ -161,7 +189,10 @@ pipeline {
                                                     kubernetes_secret_v1.app ${K8S_NAMESPACE}/eldenring-secrets || true
 
                                                 docker run --rm \
+                                                    --user "$(id -u):$(id -g)" \
                                                     --volumes-from "$HOSTNAME" \
+                                                    -e TF_IN_AUTOMATION="${TF_IN_AUTOMATION}" \
+                                                    -e TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR}" \
                                                     -w "$PWD/terraform" \
                                                     hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
@@ -171,7 +202,10 @@ pipeline {
                                                     kubernetes_service_v1.postgres ${K8S_NAMESPACE}/postgres-svc || true
 
                                                 docker run --rm \
+                                                    --user "$(id -u):$(id -g)" \
                                                     --volumes-from "$HOSTNAME" \
+                                                    -e TF_IN_AUTOMATION="${TF_IN_AUTOMATION}" \
+                                                    -e TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR}" \
                                                     -w "$PWD/terraform" \
                                                     hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
@@ -181,7 +215,10 @@ pipeline {
                                                     kubernetes_stateful_set_v1.postgres ${K8S_NAMESPACE}/postgres || true
 
                                                 docker run --rm \
+                                                    --user "$(id -u):$(id -g)" \
                                                     --volumes-from "$HOSTNAME" \
+                                                    -e TF_IN_AUTOMATION="${TF_IN_AUTOMATION}" \
+                                                    -e TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR}" \
                                                     -w "$PWD/terraform" \
                                                     hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
@@ -191,7 +228,10 @@ pipeline {
                                                     kubernetes_deployment_v1.backend ${K8S_NAMESPACE}/eldenring-backend || true
 
                                                 docker run --rm \
+                                                    --user "$(id -u):$(id -g)" \
                                                     --volumes-from "$HOSTNAME" \
+                                                    -e TF_IN_AUTOMATION="${TF_IN_AUTOMATION}" \
+                                                    -e TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR}" \
                                                     -w "$PWD/terraform" \
                                                     hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
@@ -201,7 +241,10 @@ pipeline {
                                                     kubernetes_service_v1.backend ${K8S_NAMESPACE}/eldenring-backend-svc || true
 
                                                 docker run --rm \
+                                                    --user "$(id -u):$(id -g)" \
                                                     --volumes-from "$HOSTNAME" \
+                                                    -e TF_IN_AUTOMATION="${TF_IN_AUTOMATION}" \
+                                                    -e TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR}" \
                                                     -w "$PWD/terraform" \
                                                     hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
@@ -211,7 +254,10 @@ pipeline {
                                                     kubernetes_deployment_v1.frontend ${K8S_NAMESPACE}/eldenring-frontend || true
 
                                                 docker run --rm \
+                                                    --user "$(id -u):$(id -g)" \
                                                     --volumes-from "$HOSTNAME" \
+                                                    -e TF_IN_AUTOMATION="${TF_IN_AUTOMATION}" \
+                                                    -e TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR}" \
                                                     -w "$PWD/terraform" \
                                                     hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
@@ -221,13 +267,18 @@ pipeline {
                                                     kubernetes_service_v1.frontend ${K8S_NAMESPACE}/eldenring-frontend-svc || true
 
                                                 docker run --rm \
+                                                    --user "$(id -u):$(id -g)" \
                                                     --volumes-from "$HOSTNAME" \
+                                                    -e TF_IN_AUTOMATION="${TF_IN_AUTOMATION}" \
+                                                    -e TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR}" \
                                                     -w "$PWD/terraform" \
                                                     hashicorp/terraform:1.9.8 apply -auto-approve \
                                                     -var="namespace=${K8S_NAMESPACE}" \
                                                     -var="kubeconfig_path=${KUBECONFIG}" \
                                                     -var="backend_image=${BACKEND_IMAGE}" \
                                                     -var="frontend_image=${FRONTEND_IMAGE}"
+
+                        rm -rf terraform/.terraform
                     '''
                 }
             }
@@ -266,7 +317,22 @@ pipeline {
 
     post {
         always {
-            deleteDir()
+            node {
+                sh '''
+                    docker run --rm \
+                      --user 0:0 \
+                      --volumes-from "$HOSTNAME" \
+                      -w "$WORKSPACE" \
+                      alpine:3.20 sh -c 'rm -rf terraform/.terraform || true'
+
+                    if [ -d terraform/.terraform ]; then
+                      chmod -R u+w terraform/.terraform || true
+                      rm -rf terraform/.terraform || true
+                    fi
+                '''
+                deleteDir()
+            }
         }
     }
+
 }
