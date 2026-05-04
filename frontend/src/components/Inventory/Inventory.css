@@ -1,0 +1,170 @@
+.inv-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 900;
+  backdrop-filter: blur(4px);
+  padding: 2rem 1rem 2rem;
+  overflow-y: auto;
+}
+
+.inv-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  width: 100%;
+  max-width: 680px;
+  padding: 2rem 2rem 2.5rem;
+}
+
+/* Header */
+.inv-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.inv-header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.inv-eyebrow {
+  font-family: var(--font-title);
+  font-size: 0.6rem;
+  letter-spacing: 0.3em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 0.3rem;
+}
+
+.inv-title {
+  font-size: 1.4rem;
+  color: var(--gold);
+}
+
+.inv-count {
+  font-family: var(--font-title);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.inv-close-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+
+.inv-close-btn:hover {
+  color: var(--gold);
+  border-color: var(--gold-dark);
+}
+
+/* Body */
+.inv-body {
+  margin-top: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Rarity group */
+.inv-group-label {
+  font-family: var(--font-title);
+  font-size: 0.62rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  margin-bottom: 0.7rem;
+}
+
+.inv-group-label--common    { color: #888; }
+.inv-group-label--uncommon  { color: #33dd66; }
+.inv-group-label--rare      { color: #55aaff; }
+.inv-group-label--epic      { color: #cc66ff; }
+.inv-group-label--legendary { color: var(--gold); }
+
+/* Grid */
+.inv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.6rem;
+}
+
+/* Card */
+.inv-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 0.75rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.inv-card--common    { border-color: #444; }
+.inv-card--uncommon  { border-color: #22aa44; }
+.inv-card--rare      { border-color: #3399ff; }
+.inv-card--epic      { border-color: #aa44ff; }
+.inv-card--legendary { border-color: var(--gold); animation: legendaryCardPulse 2.5s ease-in-out infinite; }
+
+@keyframes legendaryCardPulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(201,168,76,0.2); }
+  50%       { box-shadow: 0 0 18px rgba(201,168,76,0.55); }
+}
+
+.inv-card--locked {
+  border-color: #2a2a2a !important;
+  opacity: 0.45;
+  filter: grayscale(1);
+  animation: none !important;
+}
+
+.inv-card-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.inv-card-name {
+  font-family: var(--font-title);
+  font-size: 0.78rem;
+  color: var(--gold-light);
+  line-height: 1.3;
+}
+
+.inv-card-desc {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.35;
+  margin-top: 0.1rem;
+}
+
+.inv-card-count {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.5rem;
+  font-family: var(--font-title);
+  font-size: 0.65rem;
+  color: var(--gold);
+  letter-spacing: 0.05em;
+}
+
+@media (max-width: 500px) {
+  .inv-panel { padding: 1.5rem 1rem 2rem; }
+  .inv-grid  { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}

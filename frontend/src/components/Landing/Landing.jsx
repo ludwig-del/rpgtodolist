@@ -21,11 +21,11 @@ export default function Landing() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.9, ease: 'easeOut' }}
       >
-        <p className="landing__eyebrow">Tarnished, rise</p>
+        <p className="landing__eyebrow">Your adventure begins</p>
 
-        <h1 className="landing__title">ELDEN RING</h1>
+        <h1 className="landing__title">RPG QUEST</h1>
 
-        <p className="landing__subtitle">Daily Quest</p>
+        <p className="landing__subtitle">Daily Todo List</p>
 
         <div className="landing__divider" />
 

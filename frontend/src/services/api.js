@@ -25,7 +25,11 @@ export const getTodaySession = ()        => api.get('/api/daily/session');
 export const selectBoss      = (boss_id) => api.post('/api/daily/select-boss', { boss_id });
 
 // Todos
-export const getTodos   = ()          => api.get('/api/todo/');
-export const createTodo = (task_name) => api.post('/api/todo/', { task_name });
-export const tickTodo   = (id)        => api.patch(`/api/todo/tick/${id}`);
-export const deleteTodo = (id)        => api.delete(`/api/todo/${id}`);
+export const getTodos    = ()                    => api.get('/api/todo/');
+export const createTodo  = (task_name)           => api.post('/api/todo/', { task_name });
+export const tickTodo    = (id)                  => api.patch(`/api/todo/tick/${id}`);
+export const renameTodo  = (id, task_name)       => api.patch(`/api/todo/${id}`, { task_name });
+export const deleteTodo  = (id)                  => api.delete(`/api/todo/${id}`);
+
+// Bosses
+export const renameBoss  = (id, name)            => api.patch(`/api/daily/bosses/${id}`, { name });

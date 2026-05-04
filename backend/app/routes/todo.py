@@ -104,6 +104,32 @@ def tick_todo(todo_id: int):
     }), 200
 
 
+@todo_bp.route("/<int:todo_id>", methods=["PATCH"])
+def rename_todo(todo_id: int):
+    user = _get_or_create_user()
+    if not user:
+        return jsonify({"error": "X-Device-ID header required"}), 400
+
+    session = _get_active_session(user)
+    if not session:
+        return jsonify({"error": "No active session today"}), 404
+
+    todo = Todo.query.filter_by(id=todo_id, session_id=session.id).first()
+    if not todo:
+        return jsonify({"error": "Todo not found"}), 404
+    if todo.status == "done":
+        return jsonify({"error": "Cannot rename a completed task"}), 400
+
+    data = request.get_json() or {}
+    new_name = data.get("task_name", "").strip()
+    if not new_name:
+        return jsonify({"error": "task_name is required"}), 400
+
+    todo.task_name = new_name
+    db.session.commit()
+    return jsonify({"todo": todo.to_dict()}), 200
+
+
 @todo_bp.route("/<int:todo_id>", methods=["DELETE"])
 def delete_todo(todo_id: int):
     user = _get_or_create_user()
