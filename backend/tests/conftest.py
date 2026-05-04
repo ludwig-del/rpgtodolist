@@ -1,7 +1,9 @@
 import pytest
+from uuid import uuid4
+
 from app import create_app
 from app.extensions import db as _db
-from app.models import Boss, User
+from app.models import Boss
 
 
 @pytest.fixture(scope="session")
@@ -38,15 +40,16 @@ def client(app):
 
 
 @pytest.fixture
-def auth_headers(client):
-    client.post("/api/auth/register", json={
-        "username": "tarnished",
-        "email": "tarnished@test.com",
-        "password": "password123",
-    })
-    resp = client.post("/api/auth/login", json={
-        "email": "tarnished@test.com",
-        "password": "password123",
-    })
-    token = resp.get_json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
+def auth_headers():
+    return {"X-Device-ID": str(uuid4())}
+
+
+@pytest.fixture
+def session_headers(client, auth_headers):
+    bosses = client.get("/api/daily/bosses").get_json()
+    client.post(
+        "/api/daily/select-boss",
+        json={"boss_id": bosses[0]["id"]},
+        headers=auth_headers,
+    )
+    return auth_headers

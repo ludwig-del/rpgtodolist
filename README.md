@@ -77,7 +77,10 @@ Eldenring Project/
 │   ├── backend-deployment.yaml
 │   └── frontend-deployment.yaml
 ├── monitoring/
-│   └── prometheus.yml              # Prometheus scrape configuration
+│   ├── prometheus.yml              # Prometheus scrape configuration
+│   └── grafana/
+│       ├── dashboards/             # Auto-loaded Grafana dashboards
+│       └── provisioning/           # Auto-loaded datasource/dashboard config
 ├── backend/                        # Flask REST API
 │   ├── app/
 │   │   ├── __init__.py             # App factory + CLI commands
@@ -379,10 +382,18 @@ curl http://localhost:5000/metrics
 
 ### Grafana
 
-1. Open http://localhost:3003
-2. Login: `admin` / `admin`
-3. Add Data Source → Prometheus → URL: `http://prometheus:9090`
-4. Import Dashboard ID `11159` for Flask application metrics
+Grafana is available at `http://localhost:3003` with login `admin / admin`.
+
+It is provisioned automatically with:
+
+1. A default `Prometheus` datasource pointing to `http://prometheus:9090`
+2. An `Eldenring Backend Overview` dashboard that shows request rate, p95 latency, memory usage, and total requests
+
+Provisioning files live under:
+
+```text
+monitoring/grafana/
+```
 
 ---
 
