@@ -125,82 +125,107 @@ pipeline {
                           exit 1
                         fi
 
-                                                tf() {
-                                                    docker run --rm \
-                                                        -v "$PWD:/workspace" \
-                                                        -v "$KUBECONFIG:/tmp/kubeconfig:ro" \
-                                                        -w /workspace/terraform \
-                                                        hashicorp/terraform:1.9.8 "$@"
-                                                }
+                                                docker run --rm \
+                                                    --volumes-from "$HOSTNAME" \
+                                                    -w "$PWD/terraform" \
+                                                    hashicorp/terraform:1.9.8 init
 
-                                                tf init
-
-                                                tf import -input=false \
+                                                docker run --rm \
+                                                    --volumes-from "$HOSTNAME" \
+                                                    -w "$PWD/terraform" \
+                                                    hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
-                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="kubeconfig_path=${KUBECONFIG}" \
                                                     -var="backend_image=${BACKEND_IMAGE}" \
                                                     -var="frontend_image=${FRONTEND_IMAGE}" \
                                                     kubernetes_namespace_v1.app ${K8S_NAMESPACE} || true
 
-                                                tf import -input=false \
+                                                docker run --rm \
+                                                    --volumes-from "$HOSTNAME" \
+                                                    -w "$PWD/terraform" \
+                                                    hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
-                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="kubeconfig_path=${KUBECONFIG}" \
                                                     -var="backend_image=${BACKEND_IMAGE}" \
                                                     -var="frontend_image=${FRONTEND_IMAGE}" \
                                                     kubernetes_config_map_v1.app ${K8S_NAMESPACE}/eldenring-config || true
 
-                                                tf import -input=false \
+                                                docker run --rm \
+                                                    --volumes-from "$HOSTNAME" \
+                                                    -w "$PWD/terraform" \
+                                                    hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
-                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="kubeconfig_path=${KUBECONFIG}" \
                                                     -var="backend_image=${BACKEND_IMAGE}" \
                                                     -var="frontend_image=${FRONTEND_IMAGE}" \
                                                     kubernetes_secret_v1.app ${K8S_NAMESPACE}/eldenring-secrets || true
 
-                                                tf import -input=false \
+                                                docker run --rm \
+                                                    --volumes-from "$HOSTNAME" \
+                                                    -w "$PWD/terraform" \
+                                                    hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
-                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="kubeconfig_path=${KUBECONFIG}" \
                                                     -var="backend_image=${BACKEND_IMAGE}" \
                                                     -var="frontend_image=${FRONTEND_IMAGE}" \
                                                     kubernetes_service_v1.postgres ${K8S_NAMESPACE}/postgres-svc || true
 
-                                                tf import -input=false \
+                                                docker run --rm \
+                                                    --volumes-from "$HOSTNAME" \
+                                                    -w "$PWD/terraform" \
+                                                    hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
-                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="kubeconfig_path=${KUBECONFIG}" \
                                                     -var="backend_image=${BACKEND_IMAGE}" \
                                                     -var="frontend_image=${FRONTEND_IMAGE}" \
                                                     kubernetes_stateful_set_v1.postgres ${K8S_NAMESPACE}/postgres || true
 
-                                                tf import -input=false \
+                                                docker run --rm \
+                                                    --volumes-from "$HOSTNAME" \
+                                                    -w "$PWD/terraform" \
+                                                    hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
-                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="kubeconfig_path=${KUBECONFIG}" \
                                                     -var="backend_image=${BACKEND_IMAGE}" \
                                                     -var="frontend_image=${FRONTEND_IMAGE}" \
                                                     kubernetes_deployment_v1.backend ${K8S_NAMESPACE}/eldenring-backend || true
 
-                                                tf import -input=false \
+                                                docker run --rm \
+                                                    --volumes-from "$HOSTNAME" \
+                                                    -w "$PWD/terraform" \
+                                                    hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
-                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="kubeconfig_path=${KUBECONFIG}" \
                                                     -var="backend_image=${BACKEND_IMAGE}" \
                                                     -var="frontend_image=${FRONTEND_IMAGE}" \
                                                     kubernetes_service_v1.backend ${K8S_NAMESPACE}/eldenring-backend-svc || true
 
-                                                tf import -input=false \
+                                                docker run --rm \
+                                                    --volumes-from "$HOSTNAME" \
+                                                    -w "$PWD/terraform" \
+                                                    hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
-                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="kubeconfig_path=${KUBECONFIG}" \
                                                     -var="backend_image=${BACKEND_IMAGE}" \
                                                     -var="frontend_image=${FRONTEND_IMAGE}" \
                                                     kubernetes_deployment_v1.frontend ${K8S_NAMESPACE}/eldenring-frontend || true
 
-                                                tf import -input=false \
+                                                docker run --rm \
+                                                    --volumes-from "$HOSTNAME" \
+                                                    -w "$PWD/terraform" \
+                                                    hashicorp/terraform:1.9.8 import -input=false \
                                                     -var="namespace=${K8S_NAMESPACE}" \
-                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="kubeconfig_path=${KUBECONFIG}" \
                                                     -var="backend_image=${BACKEND_IMAGE}" \
                                                     -var="frontend_image=${FRONTEND_IMAGE}" \
                                                     kubernetes_service_v1.frontend ${K8S_NAMESPACE}/eldenring-frontend-svc || true
 
-                                                tf apply -auto-approve \
+                                                docker run --rm \
+                                                    --volumes-from "$HOSTNAME" \
+                                                    -w "$PWD/terraform" \
+                                                    hashicorp/terraform:1.9.8 apply -auto-approve \
                                                     -var="namespace=${K8S_NAMESPACE}" \
-                                                    -var="kubeconfig_path=/tmp/kubeconfig" \
+                                                    -var="kubeconfig_path=${KUBECONFIG}" \
                                                     -var="backend_image=${BACKEND_IMAGE}" \
                                                     -var="frontend_image=${FRONTEND_IMAGE}"
                     '''
