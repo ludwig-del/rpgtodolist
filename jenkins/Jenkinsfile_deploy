@@ -148,6 +148,7 @@ pipeline {
                                                 docker run --rm \
                                                         --user "$(id -u):$(id -g)" \
                                                         --volumes-from "$HOSTNAME" \
+                                                    --entrypoint /bin/sh \
                                                         -e TF_IN_AUTOMATION="${TF_IN_AUTOMATION}" \
                                                         -e TF_PLUGIN_CACHE_DIR="$TF_PLUGIN_CACHE_DIR" \
                                                         -e TF_DATA_DIR="$TF_DATA_DIR" \
@@ -156,7 +157,7 @@ pipeline {
                                                         -e BACKEND_IMAGE="${BACKEND_IMAGE}" \
                                                         -e FRONTEND_IMAGE="${FRONTEND_IMAGE}" \
                                                         -w "$PWD/terraform" \
-                                                        hashicorp/terraform:1.9.8 sh -eu -c '
+                                                        hashicorp/terraform:1.9.8 -eu -c '
                                                                 terraform init
                                                                 terraform import -input=false \
                                                                     -var="namespace=$K8S_NAMESPACE" \
