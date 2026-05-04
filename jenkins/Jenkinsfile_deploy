@@ -40,8 +40,8 @@ pipeline {
                     }
 
                     env.DOCKERHUB_NAMESPACE_RESOLVED = namespace
-                    env.BACKEND_IMAGE = "${namespace}/eldenring-backend:${params.IMAGE_TAG}"
-                    env.FRONTEND_IMAGE = "${namespace}/eldenring-frontend:${params.IMAGE_TAG}"
+                    env.BACKEND_IMAGE = "${namespace}/rpgtodolist-backend:${params.IMAGE_TAG}"
+                    env.FRONTEND_IMAGE = "${namespace}/rpgtodolist-frontend:${params.IMAGE_TAG}"
                     echo "Using Docker Hub namespace: ${namespace}"
                 }
             }
