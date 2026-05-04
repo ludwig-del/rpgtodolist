@@ -37,6 +37,7 @@ pipeline {
                     fi
                 '''
                 checkout scm
+                stash name: 'workspace-source', includes: '**/*', useDefaultExcludes: false
             }
         }
 
@@ -68,12 +69,14 @@ pipeline {
                     agent {
                         docker {
                             image 'python:3.12-slim'
-                            args '--user root'
                         }
                     }
                     steps {
+                        unstash 'workspace-source'
                         dir('backend') {
                             sh '''
+                                python -m venv .venv
+                                . .venv/bin/activate
                                 pip install -q -r requirements.txt pytest pytest-cov
                                 pytest tests/ -v --tb=short --junitxml=test-results.xml \
                                        --cov=app --cov-report=xml:coverage.xml
@@ -82,7 +85,7 @@ pipeline {
                     }
                     post {
                         always {
-                            junit 'backend/test-results.xml'
+                            junit allowEmptyResults: true, testResults: 'backend/test-results.xml'
                             archiveArtifacts artifacts: 'backend/coverage.xml', fingerprint: true, onlyIfSuccessful: false
                         }
                     }
@@ -92,10 +95,10 @@ pipeline {
                     agent {
                         docker {
                             image 'node:20-alpine'
-                            args '--user root'
                         }
                     }
                     steps {
+                        unstash 'workspace-source'
                         dir('frontend') {
                             sh '''
                                 npm ci --legacy-peer-deps
