@@ -12,6 +12,7 @@ pipeline {
     environment {
         REGISTRY = 'https://index.docker.io/v1/'
         REGISTRY_CRED = 'registry-credentials'
+        SCM_CRED = 'thana-wsl'
         KUBECONFIG_CRED = 'kubeconfig-prod'
         TF_IN_AUTOMATION = 'true'
     }
@@ -33,8 +34,36 @@ pipeline {
 
                                         rm -rf terraform/.terraform-run terraform/.terraform.d .kubeconfig || true
                 '''
-                checkout scm
-                stash name: 'workspace-source', includes: 'backend/**,frontend/**'
+                                withCredentials([usernamePassword(credentialsId: SCM_CRED, usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
+                                        sh '''
+                                                cat > .git-askpass <<'EOF'
+#!/bin/sh
+case "$1" in
+    *Username*) printf '%s' "$GIT_USERNAME" ;;
+    *Password*) printf '%s' "$GIT_PASSWORD" ;;
+    *) printf '%s' "$GIT_PASSWORD" ;;
+esac
+EOF
+                                                chmod 700 .git-askpass
+
+                                                export GIT_ASKPASS="$PWD/.git-askpass"
+                                                export GIT_TERMINAL_PROMPT=0
+
+                                                if [ ! -d .git ]; then
+                                                    git init
+                                                fi
+
+                                                git remote remove origin 2>/dev/null || true
+                                                git remote add origin https://github.com/ludwig-del/rpgtodolist.git
+                                                git fetch --prune origin +refs/heads/sun:refs/remotes/origin/sun
+                                                git checkout -B sun refs/remotes/origin/sun
+                                                git reset --hard refs/remotes/origin/sun
+                                                git clean -fdx
+
+                                                rm -f .git-askpass
+                                        '''
+                                }
+                                stash name: 'workspace-source', includes: '**/*', excludes: '.git/**'
             }
         }
 
