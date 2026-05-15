@@ -1,5 +1,7 @@
 pipeline {
-    agent any
+    agent {
+        label 'wsl'
+    }
 
     parameters {
         string(name: 'DOCKERHUB_NAMESPACE', defaultValue: '', description: 'Optional Docker Hub username or organization. Leave blank to deploy local images on Docker Desktop Kubernetes.')
@@ -24,16 +26,12 @@ pipeline {
         stage('Checkout') {
             steps {
                 sh '''
-                                        docker run --rm \
-                                            --user 0:0 \
-                                            --volumes-from "$HOSTNAME" \
-                                            -w "$WORKSPACE" \
-                                            alpine:3.20 sh -c 'rm -rf terraform/.terraform || true'
-
                     if [ -d terraform/.terraform ]; then
                       chmod -R u+w terraform/.terraform || true
                       rm -rf terraform/.terraform || true
                     fi
+
+                                        rm -rf terraform/.terraform-run terraform/.terraform.d .kubeconfig || true
                 '''
                 checkout scm
                 stash name: 'workspace-source', includes: 'backend/**,frontend/**'
@@ -68,6 +66,8 @@ pipeline {
                     agent {
                         docker {
                             image 'python:3.12-slim'
+                            label 'wsl'
+                            reuseNode true
                         }
                     }
                     steps {
@@ -94,6 +94,8 @@ pipeline {
                     agent {
                         docker {
                             image 'node:20-alpine'
+                            label 'wsl'
+                            reuseNode true
                         }
                     }
                     steps {
@@ -141,86 +143,87 @@ pipeline {
                           exit 1
                         fi
 
-                                                export TF_PLUGIN_CACHE_DIR="$PWD/terraform/.terraform.d/plugin-cache"
-                                                export TF_DATA_DIR="$PWD/terraform/.terraform-run"
-                                                mkdir -p "$TF_PLUGIN_CACHE_DIR" "$TF_DATA_DIR"
+                        export TF_PLUGIN_CACHE_DIR="/workspace/terraform/.terraform.d/plugin-cache"
+                        export TF_DATA_DIR="/workspace/terraform/.terraform-run"
+                        mkdir -p terraform/.terraform.d/plugin-cache terraform/.terraform-run
+                        cp "$KUBECONFIG" .kubeconfig
 
-                                                docker run --rm \
-                                                        --user "$(id -u):$(id -g)" \
-                                                        --volumes-from "$HOSTNAME" \
-                                                    --entrypoint /bin/sh \
-                                                        -e TF_IN_AUTOMATION="${TF_IN_AUTOMATION}" \
-                                                        -e TF_PLUGIN_CACHE_DIR="$TF_PLUGIN_CACHE_DIR" \
-                                                        -e TF_DATA_DIR="$TF_DATA_DIR" \
-                                                        -e K8S_NAMESPACE="${K8S_NAMESPACE}" \
-                                                        -e KUBECONFIG="${KUBECONFIG}" \
-                                                        -e BACKEND_IMAGE="${BACKEND_IMAGE}" \
-                                                        -e FRONTEND_IMAGE="${FRONTEND_IMAGE}" \
-                                                        -w "$PWD/terraform" \
-                                                        hashicorp/terraform:1.9.8 -eu -c '
-                                                                terraform init
-                                                                terraform import -input=false \
-                                                                    -var="namespace=$K8S_NAMESPACE" \
-                                                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                                                    -var="backend_image=$BACKEND_IMAGE" \
-                                                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                                                    kubernetes_namespace_v1.app "$K8S_NAMESPACE" || true
-                                                                terraform import -input=false \
-                                                                    -var="namespace=$K8S_NAMESPACE" \
-                                                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                                                    -var="backend_image=$BACKEND_IMAGE" \
-                                                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                                                    kubernetes_config_map_v1.app "$K8S_NAMESPACE/eldenring-config" || true
-                                                                terraform import -input=false \
-                                                                    -var="namespace=$K8S_NAMESPACE" \
-                                                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                                                    -var="backend_image=$BACKEND_IMAGE" \
-                                                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                                                    kubernetes_secret_v1.app "$K8S_NAMESPACE/eldenring-secrets" || true
-                                                                terraform import -input=false \
-                                                                    -var="namespace=$K8S_NAMESPACE" \
-                                                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                                                    -var="backend_image=$BACKEND_IMAGE" \
-                                                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                                                    kubernetes_service_v1.postgres "$K8S_NAMESPACE/postgres-svc" || true
-                                                                terraform import -input=false \
-                                                                    -var="namespace=$K8S_NAMESPACE" \
-                                                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                                                    -var="backend_image=$BACKEND_IMAGE" \
-                                                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                                                    kubernetes_stateful_set_v1.postgres "$K8S_NAMESPACE/postgres" || true
-                                                                terraform import -input=false \
-                                                                    -var="namespace=$K8S_NAMESPACE" \
-                                                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                                                    -var="backend_image=$BACKEND_IMAGE" \
-                                                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                                                    kubernetes_deployment_v1.backend "$K8S_NAMESPACE/eldenring-backend" || true
-                                                                terraform import -input=false \
-                                                                    -var="namespace=$K8S_NAMESPACE" \
-                                                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                                                    -var="backend_image=$BACKEND_IMAGE" \
-                                                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                                                    kubernetes_service_v1.backend "$K8S_NAMESPACE/eldenring-backend-svc" || true
-                                                                terraform import -input=false \
-                                                                    -var="namespace=$K8S_NAMESPACE" \
-                                                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                                                    -var="backend_image=$BACKEND_IMAGE" \
-                                                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                                                    kubernetes_deployment_v1.frontend "$K8S_NAMESPACE/eldenring-frontend" || true
-                                                                terraform import -input=false \
-                                                                    -var="namespace=$K8S_NAMESPACE" \
-                                                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                                                    -var="backend_image=$BACKEND_IMAGE" \
-                                                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                                                    kubernetes_service_v1.frontend "$K8S_NAMESPACE/eldenring-frontend-svc" || true
-                                                                terraform apply -auto-approve \
-                                                                    -var="namespace=$K8S_NAMESPACE" \
-                                                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                                                    -var="backend_image=$BACKEND_IMAGE" \
-                                                                    -var="frontend_image=$FRONTEND_IMAGE"
-                                                        '
+                        docker run --rm \
+                            --user "$(id -u):$(id -g)" \
+                            -v "$PWD:/workspace" \
+                            -w /workspace/terraform \
+                            -e TF_IN_AUTOMATION="${TF_IN_AUTOMATION}" \
+                            -e TF_PLUGIN_CACHE_DIR="$TF_PLUGIN_CACHE_DIR" \
+                            -e TF_DATA_DIR="$TF_DATA_DIR" \
+                            -e K8S_NAMESPACE="${K8S_NAMESPACE}" \
+                            -e KUBECONFIG="/workspace/.kubeconfig" \
+                            -e BACKEND_IMAGE="${BACKEND_IMAGE}" \
+                            -e FRONTEND_IMAGE="${FRONTEND_IMAGE}" \
+                            hashicorp/terraform:1.9.8 sh -eu -c '
+                                terraform init
+                                terraform import -input=false \
+                                    -var="namespace=$K8S_NAMESPACE" \
+                                    -var="kubeconfig_path=$KUBECONFIG" \
+                                    -var="backend_image=$BACKEND_IMAGE" \
+                                    -var="frontend_image=$FRONTEND_IMAGE" \
+                                    kubernetes_namespace_v1.app "$K8S_NAMESPACE" || true
+                                terraform import -input=false \
+                                    -var="namespace=$K8S_NAMESPACE" \
+                                    -var="kubeconfig_path=$KUBECONFIG" \
+                                    -var="backend_image=$BACKEND_IMAGE" \
+                                    -var="frontend_image=$FRONTEND_IMAGE" \
+                                    kubernetes_config_map_v1.app "$K8S_NAMESPACE/eldenring-config" || true
+                                terraform import -input=false \
+                                    -var="namespace=$K8S_NAMESPACE" \
+                                    -var="kubeconfig_path=$KUBECONFIG" \
+                                    -var="backend_image=$BACKEND_IMAGE" \
+                                    -var="frontend_image=$FRONTEND_IMAGE" \
+                                    kubernetes_secret_v1.app "$K8S_NAMESPACE/eldenring-secrets" || true
+                                terraform import -input=false \
+                                    -var="namespace=$K8S_NAMESPACE" \
+                                    -var="kubeconfig_path=$KUBECONFIG" \
+                                    -var="backend_image=$BACKEND_IMAGE" \
+                                    -var="frontend_image=$FRONTEND_IMAGE" \
+                                    kubernetes_service_v1.postgres "$K8S_NAMESPACE/postgres-svc" || true
+                                terraform import -input=false \
+                                    -var="namespace=$K8S_NAMESPACE" \
+                                    -var="kubeconfig_path=$KUBECONFIG" \
+                                    -var="backend_image=$BACKEND_IMAGE" \
+                                    -var="frontend_image=$FRONTEND_IMAGE" \
+                                    kubernetes_stateful_set_v1.postgres "$K8S_NAMESPACE/postgres" || true
+                                terraform import -input=false \
+                                    -var="namespace=$K8S_NAMESPACE" \
+                                    -var="kubeconfig_path=$KUBECONFIG" \
+                                    -var="backend_image=$BACKEND_IMAGE" \
+                                    -var="frontend_image=$FRONTEND_IMAGE" \
+                                    kubernetes_deployment_v1.backend "$K8S_NAMESPACE/eldenring-backend" || true
+                                terraform import -input=false \
+                                    -var="namespace=$K8S_NAMESPACE" \
+                                    -var="kubeconfig_path=$KUBECONFIG" \
+                                    -var="backend_image=$BACKEND_IMAGE" \
+                                    -var="frontend_image=$FRONTEND_IMAGE" \
+                                    kubernetes_service_v1.backend "$K8S_NAMESPACE/eldenring-backend-svc" || true
+                                terraform import -input=false \
+                                    -var="namespace=$K8S_NAMESPACE" \
+                                    -var="kubeconfig_path=$KUBECONFIG" \
+                                    -var="backend_image=$BACKEND_IMAGE" \
+                                    -var="frontend_image=$FRONTEND_IMAGE" \
+                                    kubernetes_deployment_v1.frontend "$K8S_NAMESPACE/eldenring-frontend" || true
+                                terraform import -input=false \
+                                    -var="namespace=$K8S_NAMESPACE" \
+                                    -var="kubeconfig_path=$KUBECONFIG" \
+                                    -var="backend_image=$BACKEND_IMAGE" \
+                                    -var="frontend_image=$FRONTEND_IMAGE" \
+                                    kubernetes_service_v1.frontend "$K8S_NAMESPACE/eldenring-frontend-svc" || true
+                                terraform apply -auto-approve \
+                                    -var="namespace=$K8S_NAMESPACE" \
+                                    -var="kubeconfig_path=$KUBECONFIG" \
+                                    -var="backend_image=$BACKEND_IMAGE" \
+                                    -var="frontend_image=$FRONTEND_IMAGE"
+                            '
 
-                                                rm -rf terraform/.terraform terraform/.terraform-run terraform/.terraform.d
+                        rm -f .kubeconfig
+                        rm -rf terraform/.terraform terraform/.terraform-run terraform/.terraform.d
                     '''
                 }
             }
@@ -259,21 +262,15 @@ pipeline {
 
     post {
         always {
-            node(label: '') {
-                sh '''
-                    docker run --rm \
-                      --user 0:0 \
-                      --volumes-from "$HOSTNAME" \
-                      -w "$WORKSPACE" \
-                      alpine:3.20 sh -c 'rm -rf terraform/.terraform || true'
+                        sh '''
+                                if [ -d terraform/.terraform ]; then
+                                    chmod -R u+w terraform/.terraform || true
+                                    rm -rf terraform/.terraform || true
+                                fi
 
-                    if [ -d terraform/.terraform ]; then
-                      chmod -R u+w terraform/.terraform || true
-                      rm -rf terraform/.terraform || true
-                    fi
-                '''
-                deleteDir()
-            }
+                                rm -rf terraform/.terraform-run terraform/.terraform.d .kubeconfig || true
+                        '''
+                        deleteDir()
         }
     }
 
