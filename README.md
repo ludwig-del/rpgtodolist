@@ -8,6 +8,8 @@
 ## Table of Contents
 
 - [Project Overview](#project-overview)
+- [Architecture Diagram](#architecture-diagram)
+- [Branching Strategy](#branching-strategy)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Database Schema](#database-schema)
@@ -27,6 +29,47 @@ This application is a **Gamified Daily Todo List** inspired by Elden Ring. The c
 2. **Add Todos** — Create the tasks you need to complete today
 3. **Tick Complete** — Checking off a task deals damage to the boss (reduces HP)
 4. **Defeat the Boss** — Complete all required tasks to defeat the boss and clear the daily quest
+
+## Architecture Diagram
+
+```mermaid
+flowchart LR
+  User[User Browser] --> Frontend[React Frontend\nNodePort 30080]
+  Frontend --> Backend[Flask API\nNodePort 30500]
+  Backend --> Postgres[(PostgreSQL)]
+  Backend --> Metrics[/metrics]
+  Metrics --> Prometheus[Prometheus]
+  Prometheus --> Grafana[Grafana Dashboard]
+
+  GitHub[GitHub Repository] --> Webhook[GitHub Webhook]
+  Webhook --> Jenkins[Jenkins Pipeline]
+  Jenkins --> DockerHub[Docker Hub or Local Docker Cache]
+  Jenkins --> Terraform[Terraform]
+  Jenkins --> Ansible[Ansible]
+  Terraform --> K8s[Kubernetes Namespace]
+  Ansible --> K8s
+  DockerHub --> K8s
+  K8s --> Frontend
+  K8s --> Backend
+  K8s --> Postgres
+```
+
+## Branching Strategy
+
+This repository uses a simple branch model that matches the Jenkins setup used during grading:
+
+- `main` stores the stable baseline of the project.
+- `sun` is the active integration and demo branch used by the deploy pipeline.
+- `feature/<topic>` branches are created for isolated work, reviewed, then merged into `sun`.
+- After end-to-end validation on `sun`, the final state can be merged back into `main`.
+
+Recommended workflow:
+
+```text
+feature/* -> sun -> main
+```
+
+This keeps the branch that Jenkins watches aligned with the branch used for deployment demos, while preserving a clean stable branch for submission history.
 
 ### Boss List & Task Requirements
 
@@ -288,6 +331,15 @@ kubectl get nodes
 
 ### 2. Manual Manifest Deployment
 
+The static manifests in `k8s/` default to the local image tags `rpgtodolist-backend:latest` and `rpgtodolist-frontend:latest`. Build them first when using Docker Desktop Kubernetes:
+
+```bash
+docker build -t rpgtodolist-backend:latest -f backend/dockerfile backend
+docker build -t rpgtodolist-frontend:latest -f frontend/dockerfile frontend
+```
+
+If you want to deploy images from Docker Hub instead, replace those image tags in the manifests before applying them.
+
 ```bash
 kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/configmap.yaml
@@ -376,6 +428,21 @@ Terraform requirement:
 - **Trigger:** Push event
 
 Every push to the branch configured in the Jenkins job triggers the full pipeline. In the current validation setup, the deploy job reads `jenkins/Jenkinsfile_deploy` from branch `sun`.
+
+### Submission Checklist
+
+Use this checklist before the final demo or grading run.
+
+- [ ] Push the latest code to the Jenkins-watched branch (`sun` in the current setup).
+- [ ] Confirm the GitHub webhook is active and Jenkins receives push events.
+- [ ] Run the deploy pipeline and verify all 6 stages succeed.
+- [ ] If manual Kubernetes deployment is used, build the local images before `kubectl apply`.
+- [ ] Verify `kubectl get pods -n eldenring` shows backend, frontend, and postgres in `Running` state.
+- [ ] Verify the app is reachable on `http://localhost:30080` and the backend on `http://localhost:30500`.
+- [ ] Verify `http://localhost:5000/metrics` responds locally or through the cluster backend service.
+- [ ] Verify Prometheus targets are `UP` and Grafana dashboard panels show live data.
+- [ ] Keep one short demo path ready: `git push` -> Jenkins run -> rollout status -> open app.
+- [ ] Be ready to explain why Terraform provisions base resources and Ansible performs rollout updates.
 
 ---
 
