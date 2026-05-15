@@ -171,7 +171,7 @@ def read_secret(key: str, default: str) -> str:
 postgres_password = read_secret('POSTGRES_PASSWORD', 'REPLACE_WITH_DB_PASSWORD')
 secret_key = read_secret('SECRET_KEY', 'super-secret-prod-key-eldenring-2026')
 
-terraform_script = '\n'.join([
+terraform_script = '\\n'.join([
     'terraform import -input=false kubernetes_namespace_v1.app "$TF_VAR_namespace" || true',
     'terraform import -input=false kubernetes_config_map_v1.app "$TF_VAR_namespace/eldenring-config" || true',
     'terraform import -input=false kubernetes_secret_v1.app "$TF_VAR_namespace/eldenring-secrets" || true',
