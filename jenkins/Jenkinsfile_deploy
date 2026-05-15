@@ -12,6 +12,7 @@ pipeline {
     environment {
         SCM_CRED = 'thana-wsl'
         KUBECONFIG_CRED = 'kubeconfig-prod'
+        TF_IN_AUTOMATION = 'true'
     }
 
     options {
@@ -88,6 +89,85 @@ EOF
             }
         }
 
+        stage('Terraform Init') {
+            steps {
+                withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
+                    sh '''
+                        if [ ! -f terraform/main.tf ]; then
+                            echo 'No terraform/main.tf found in this repository.'
+                            exit 1
+                        fi
+
+                        rm -rf terraform/.terraform terraform/.terraform-run terraform/.terraform.d .kubeconfig || true
+                        mkdir -p terraform/.terraform.d/plugin-cache terraform/.terraform-run
+                        cp "$KUBECONFIG" .kubeconfig
+
+                        docker run --rm \
+                            --user "$(id -u):$(id -g)" \
+                            --entrypoint /bin/sh \
+                            -v "$PWD:/workspace" \
+                            -w /workspace/terraform \
+                            -e TF_IN_AUTOMATION="$TF_IN_AUTOMATION" \
+                            -e TF_PLUGIN_CACHE_DIR="/workspace/terraform/.terraform.d/plugin-cache" \
+                            -e TF_DATA_DIR="/workspace/terraform/.terraform-run" \
+                            -e TF_VAR_namespace="$K8S_NAMESPACE" \
+                            -e TF_VAR_kubeconfig_path="/workspace/.kubeconfig" \
+                            -e TF_VAR_backend_image="$BACKEND_IMAGE" \
+                            -e TF_VAR_frontend_image="$FRONTEND_IMAGE" \
+                            hashicorp/terraform:1.9.8 -eu -c 'terraform init'
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
+                    sh '''
+                        cp "$KUBECONFIG" .kubeconfig
+
+                        CURRENT_POSTGRES_PASSWORD=$(kubectl get secret eldenring-secrets -n "$K8S_NAMESPACE" -o jsonpath='{.data.POSTGRES_PASSWORD}' 2>/dev/null | base64 -d || true)
+                        CURRENT_SECRET_KEY=$(kubectl get secret eldenring-secrets -n "$K8S_NAMESPACE" -o jsonpath='{.data.SECRET_KEY}' 2>/dev/null | base64 -d || true)
+
+                        if [ -z "$CURRENT_POSTGRES_PASSWORD" ]; then
+                            CURRENT_POSTGRES_PASSWORD='REPLACE_WITH_DB_PASSWORD'
+                        fi
+
+                        if [ -z "$CURRENT_SECRET_KEY" ]; then
+                            CURRENT_SECRET_KEY='super-secret-prod-key-eldenring-2026'
+                        fi
+
+                        docker run --rm \
+                            --user "$(id -u):$(id -g)" \
+                            --entrypoint /bin/sh \
+                            -v "$PWD:/workspace" \
+                            -w /workspace/terraform \
+                            -e TF_IN_AUTOMATION="$TF_IN_AUTOMATION" \
+                            -e TF_PLUGIN_CACHE_DIR="/workspace/terraform/.terraform.d/plugin-cache" \
+                            -e TF_DATA_DIR="/workspace/terraform/.terraform-run" \
+                            -e TF_VAR_namespace="$K8S_NAMESPACE" \
+                            -e TF_VAR_kubeconfig_path="/workspace/.kubeconfig" \
+                            -e TF_VAR_backend_image="$BACKEND_IMAGE" \
+                            -e TF_VAR_frontend_image="$FRONTEND_IMAGE" \
+                            -e TF_VAR_postgres_password="$CURRENT_POSTGRES_PASSWORD" \
+                            -e TF_VAR_secret_key="$CURRENT_SECRET_KEY" \
+                            hashicorp/terraform:1.9.8 -eu -c '
+                                terraform import -input=false kubernetes_namespace_v1.app "$TF_VAR_namespace" || true
+                                terraform import -input=false kubernetes_config_map_v1.app "$TF_VAR_namespace/eldenring-config" || true
+                                terraform import -input=false kubernetes_secret_v1.app "$TF_VAR_namespace/eldenring-secrets" || true
+                                terraform import -input=false kubernetes_service_v1.postgres "$TF_VAR_namespace/postgres-svc" || true
+                                terraform import -input=false kubernetes_stateful_set_v1.postgres "$TF_VAR_namespace/postgres" || true
+                                terraform import -input=false kubernetes_deployment_v1.backend "$TF_VAR_namespace/eldenring-backend" || true
+                                terraform import -input=false kubernetes_service_v1.backend "$TF_VAR_namespace/eldenring-backend-svc" || true
+                                terraform import -input=false kubernetes_deployment_v1.frontend "$TF_VAR_namespace/eldenring-frontend" || true
+                                terraform import -input=false kubernetes_service_v1.frontend "$TF_VAR_namespace/eldenring-frontend-svc" || true
+                                terraform apply -auto-approve
+                            '
+                    '''
+                }
+            }
+        }
+
         stage('Deploy Backend') {
             steps {
                 withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
@@ -122,26 +202,19 @@ EOF
             }
         }
 
-        stage('Cleanup') {
-            steps {
-                sh '''
-                    if [ -d terraform/.terraform ]; then
-                        chmod -R u+w terraform/.terraform || true
-                        rm -rf terraform/.terraform || true
-                    fi
-
-                    rm -rf terraform/.terraform-run terraform/.terraform.d .kubeconfig || true
-                '''
-                deleteDir()
-            }
-        }
     }
 
     post {
         always {
             sh '''
-                rm -rf terraform/.terraform-run terraform/.terraform.d .kubeconfig || true
+                if [ -d terraform/.terraform ]; then
+                    chmod -R u+w terraform/.terraform || true
+                    rm -rf terraform/.terraform || true
+                fi
+
+                rm -rf terraform/.terraform-run terraform/.terraform.d .kubeconfig /tmp/ansible-venv || true
             '''
+            deleteDir()
         }
     }
 
