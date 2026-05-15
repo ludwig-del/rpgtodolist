@@ -63,24 +63,18 @@ pipeline {
         stage('Build + Test') {
             parallel {
                 stage('Test Backend') {
-                    agent {
-                        docker {
-                            image 'python:3.12-slim'
-                            label 'wsl'
-                            reuseNode true
-                        }
-                    }
                     steps {
                         unstash 'workspace-source'
-                        dir('backend') {
-                            sh '''
-                                python -m venv .venv
-                                . .venv/bin/activate
-                                pip install -q -r requirements.txt pytest pytest-cov
-                                pytest tests/ -v --tb=short --junitxml=test-results.xml \
-                                       --cov=app --cov-report=xml:coverage.xml
-                            '''
-                        }
+                        sh '''
+                            docker run --rm \
+                                -v "$PWD:/workspace" \
+                                -w /workspace/backend \
+                                python:3.12-slim sh -lc '
+                                    pip install -q -r requirements.txt pytest pytest-cov
+                                    pytest tests/ -v --tb=short --junitxml=test-results.xml \
+                                           --cov=app --cov-report=xml:coverage.xml
+                                '
+                        '''
                     }
                     post {
                         always {
@@ -91,21 +85,18 @@ pipeline {
                 }
 
                 stage('Test Frontend') {
-                    agent {
-                        docker {
-                            image 'node:20-alpine'
-                            label 'wsl'
-                            reuseNode true
-                        }
-                    }
                     steps {
                         unstash 'workspace-source'
-                        dir('frontend') {
-                            sh '''
-                                npm ci --legacy-peer-deps
-                                npx react-scripts test --watchAll=false --ci --passWithNoTests
-                            '''
-                        }
+                        sh '''
+                            docker run --rm \
+                                -v "$PWD:/workspace" \
+                                -w /workspace/frontend \
+                                -e CI=true \
+                                node:20-alpine sh -lc '
+                                    npm ci --legacy-peer-deps
+                                    npx react-scripts test --watchAll=false --ci --passWithNoTests
+                                '
+                        '''
                     }
                 }
             }
