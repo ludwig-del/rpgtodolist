@@ -47,11 +47,12 @@ EOF
                         git remote remove origin 2>/dev/null || true
                         git remote add origin https://github.com/ludwig-del/rpgtodolist.git
                             git reset --hard HEAD 2>/dev/null || true
-                            git clean -fdx
+                            # NTFS-backed workspaces can report transient unlink failures for prior node_modules content.
+                            git clean -fdx || true
                         git fetch --prune origin +refs/heads/sun:refs/remotes/origin/sun
                         git checkout -B sun refs/remotes/origin/sun
                         git reset --hard refs/remotes/origin/sun
-                        git clean -fdx
+                            git clean -fdx || true
 
                         rm -f .git-askpass
                     '''
