@@ -92,30 +92,47 @@ EOF
         stage('Terraform Init') {
             steps {
                 withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
-                    sh '''
-                        if [ ! -f terraform/main.tf ]; then
-                            echo 'No terraform/main.tf found in this repository.'
-                            exit 1
-                        fi
+                    script {
+                        writeFile file: 'terraform_init.py', text: '''import os
+import shutil
+import subprocess
 
-                        rm -rf terraform/.terraform terraform/.terraform-run terraform/.terraform.d .kubeconfig || true
-                        mkdir -p terraform/.terraform.d/plugin-cache terraform/.terraform-run
-                        cp "$KUBECONFIG" .kubeconfig
+workspace = os.getcwd().strip()
+terraform_dir = os.path.join(workspace, 'terraform')
+if not os.path.isfile(os.path.join(terraform_dir, 'main.tf')):
+    raise SystemExit('No terraform/main.tf found in this repository.')
 
-                        docker run --rm \
-                            --user "$(id -u):$(id -g)" \
-                            --entrypoint /bin/sh \
-                            -v "$PWD:/workspace" \
-                            -w /workspace/terraform \
-                            -e TF_IN_AUTOMATION="$TF_IN_AUTOMATION" \
-                            -e TF_PLUGIN_CACHE_DIR="/workspace/terraform/.terraform.d/plugin-cache" \
-                            -e TF_DATA_DIR="/workspace/terraform/.terraform-run" \
-                            -e TF_VAR_namespace="$K8S_NAMESPACE" \
-                            -e TF_VAR_kubeconfig_path="/workspace/.kubeconfig" \
-                            -e TF_VAR_backend_image="$BACKEND_IMAGE" \
-                            -e TF_VAR_frontend_image="$FRONTEND_IMAGE" \
-                            hashicorp/terraform:1.9.8 -eu -c 'terraform init'
-                    '''
+for path in [
+    os.path.join(terraform_dir, '.terraform'),
+    os.path.join(terraform_dir, '.terraform-run'),
+    os.path.join(terraform_dir, '.terraform.d'),
+    os.path.join(workspace, '.kubeconfig'),
+]:
+    shutil.rmtree(path, ignore_errors=True) if os.path.isdir(path) else (os.remove(path) if os.path.exists(path) else None)
+
+os.makedirs(os.path.join(terraform_dir, '.terraform.d', 'plugin-cache'), exist_ok=True)
+os.makedirs(os.path.join(terraform_dir, '.terraform-run'), exist_ok=True)
+shutil.copyfile(os.environ['KUBECONFIG'].strip(), os.path.join(workspace, '.kubeconfig'))
+
+subprocess.run([
+    'docker', 'run', '--rm',
+    '--user', f"{os.getuid()}:{os.getgid()}",
+    '--entrypoint', '/bin/sh',
+    '-v', f'{workspace}:/workspace',
+    '-w', '/workspace/terraform',
+    '-e', f"TF_IN_AUTOMATION={os.environ['TF_IN_AUTOMATION']}",
+    '-e', 'TF_PLUGIN_CACHE_DIR=/workspace/terraform/.terraform.d/plugin-cache',
+    '-e', 'TF_DATA_DIR=/workspace/terraform/.terraform-run',
+    '-e', f"TF_VAR_namespace={os.environ['K8S_NAMESPACE']}",
+    '-e', 'TF_VAR_kubeconfig_path=/workspace/.kubeconfig',
+    '-e', f"TF_VAR_backend_image={os.environ['BACKEND_IMAGE']}",
+    '-e', f"TF_VAR_frontend_image={os.environ['FRONTEND_IMAGE']}",
+    'hashicorp/terraform:1.9.8',
+    '-eu', '-c', 'terraform init', 'terraform-init-wrapper'
+], check=True)
+'''.replace('\r', '')
+                        sh 'python3 terraform_init.py'
+                    }
                 }
             }
         }
@@ -123,47 +140,71 @@ EOF
         stage('Terraform Apply') {
             steps {
                 withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
-                    sh '''
-                        cp "$KUBECONFIG" .kubeconfig
+                    script {
+                        writeFile file: 'terraform_apply.py', text: '''import os
+import shutil
+import subprocess
 
-                        CURRENT_POSTGRES_PASSWORD=$(kubectl get secret eldenring-secrets -n "$K8S_NAMESPACE" -o jsonpath='{.data.POSTGRES_PASSWORD}' 2>/dev/null | base64 -d || true)
-                        CURRENT_SECRET_KEY=$(kubectl get secret eldenring-secrets -n "$K8S_NAMESPACE" -o jsonpath='{.data.SECRET_KEY}' 2>/dev/null | base64 -d || true)
+workspace = os.getcwd().strip()
+terraform_dir = os.path.join(workspace, 'terraform')
+kubeconfig_src = os.environ['KUBECONFIG'].strip()
+kubeconfig_dst = os.path.join(workspace, '.kubeconfig')
+shutil.copyfile(kubeconfig_src, kubeconfig_dst)
 
-                        if [ -z "$CURRENT_POSTGRES_PASSWORD" ]; then
-                            CURRENT_POSTGRES_PASSWORD='REPLACE_WITH_DB_PASSWORD'
-                        fi
+namespace = os.environ['K8S_NAMESPACE']
 
-                        if [ -z "$CURRENT_SECRET_KEY" ]; then
-                            CURRENT_SECRET_KEY='super-secret-prod-key-eldenring-2026'
-                        fi
+def read_secret(key: str, default: str) -> str:
+    try:
+        completed = subprocess.run([
+            'kubectl', 'get', 'secret', 'eldenring-secrets',
+            '-n', namespace,
+            '-o', f'jsonpath={{.data.{key}}}'
+        ], check=True, capture_output=True, text=True)
+        value = completed.stdout.strip()
+        if not value:
+            return default
+        decoded = subprocess.run(['base64', '-d'], input=value, check=True, capture_output=True, text=True)
+        return decoded.stdout.strip() or default
+    except Exception:
+        return default
 
-                        docker run --rm \
-                            --user "$(id -u):$(id -g)" \
-                            --entrypoint /bin/sh \
-                            -v "$PWD:/workspace" \
-                            -w /workspace/terraform \
-                            -e TF_IN_AUTOMATION="$TF_IN_AUTOMATION" \
-                            -e TF_PLUGIN_CACHE_DIR="/workspace/terraform/.terraform.d/plugin-cache" \
-                            -e TF_DATA_DIR="/workspace/terraform/.terraform-run" \
-                            -e TF_VAR_namespace="$K8S_NAMESPACE" \
-                            -e TF_VAR_kubeconfig_path="/workspace/.kubeconfig" \
-                            -e TF_VAR_backend_image="$BACKEND_IMAGE" \
-                            -e TF_VAR_frontend_image="$FRONTEND_IMAGE" \
-                            -e TF_VAR_postgres_password="$CURRENT_POSTGRES_PASSWORD" \
-                            -e TF_VAR_secret_key="$CURRENT_SECRET_KEY" \
-                            hashicorp/terraform:1.9.8 -eu -c '
-                                terraform import -input=false kubernetes_namespace_v1.app "$TF_VAR_namespace" || true
-                                terraform import -input=false kubernetes_config_map_v1.app "$TF_VAR_namespace/eldenring-config" || true
-                                terraform import -input=false kubernetes_secret_v1.app "$TF_VAR_namespace/eldenring-secrets" || true
-                                terraform import -input=false kubernetes_service_v1.postgres "$TF_VAR_namespace/postgres-svc" || true
-                                terraform import -input=false kubernetes_stateful_set_v1.postgres "$TF_VAR_namespace/postgres" || true
-                                terraform import -input=false kubernetes_deployment_v1.backend "$TF_VAR_namespace/eldenring-backend" || true
-                                terraform import -input=false kubernetes_service_v1.backend "$TF_VAR_namespace/eldenring-backend-svc" || true
-                                terraform import -input=false kubernetes_deployment_v1.frontend "$TF_VAR_namespace/eldenring-frontend" || true
-                                terraform import -input=false kubernetes_service_v1.frontend "$TF_VAR_namespace/eldenring-frontend-svc" || true
-                                terraform apply -auto-approve
-                            '
-                    '''
+postgres_password = read_secret('POSTGRES_PASSWORD', 'REPLACE_WITH_DB_PASSWORD')
+secret_key = read_secret('SECRET_KEY', 'super-secret-prod-key-eldenring-2026')
+
+terraform_script = '\\n'.join([
+    'terraform import -input=false kubernetes_namespace_v1.app "$TF_VAR_namespace" || true',
+    'terraform import -input=false kubernetes_config_map_v1.app "$TF_VAR_namespace/eldenring-config" || true',
+    'terraform import -input=false kubernetes_secret_v1.app "$TF_VAR_namespace/eldenring-secrets" || true',
+    'terraform import -input=false kubernetes_service_v1.postgres "$TF_VAR_namespace/postgres-svc" || true',
+    'terraform import -input=false kubernetes_stateful_set_v1.postgres "$TF_VAR_namespace/postgres" || true',
+    'terraform import -input=false kubernetes_deployment_v1.backend "$TF_VAR_namespace/eldenring-backend" || true',
+    'terraform import -input=false kubernetes_service_v1.backend "$TF_VAR_namespace/eldenring-backend-svc" || true',
+    'terraform import -input=false kubernetes_deployment_v1.frontend "$TF_VAR_namespace/eldenring-frontend" || true',
+    'terraform import -input=false kubernetes_service_v1.frontend "$TF_VAR_namespace/eldenring-frontend-svc" || true',
+    'terraform apply -auto-approve',
+])
+
+subprocess.run([
+    'docker', 'run', '--rm',
+    '--user', f"{os.getuid()}:{os.getgid()}",
+    '--entrypoint', '/bin/sh',
+    '-v', f'{workspace}:/workspace',
+    '-w', '/workspace/terraform',
+    '-e', f"TF_IN_AUTOMATION={os.environ['TF_IN_AUTOMATION']}",
+    '-e', 'TF_PLUGIN_CACHE_DIR=/workspace/terraform/.terraform.d/plugin-cache',
+    '-e', 'TF_DATA_DIR=/workspace/terraform/.terraform-run',
+    '-e', f"TF_VAR_namespace={namespace}",
+    '-e', 'TF_VAR_kubeconfig_path=/workspace/.kubeconfig',
+    '-e', f"TF_VAR_backend_image={os.environ['BACKEND_IMAGE']}",
+    '-e', f"TF_VAR_frontend_image={os.environ['FRONTEND_IMAGE']}",
+    '-e', f'TF_VAR_postgres_password={postgres_password}',
+    '-e', f'TF_VAR_secret_key={secret_key}',
+    'hashicorp/terraform:1.9.8',
+    '-eu', '-c', terraform_script, 'terraform-apply-wrapper'
+], check=True)
+'''.replace('\r', '')
+                        sh 'python3 terraform_apply.py'
+                    }
                 }
             }
         }
