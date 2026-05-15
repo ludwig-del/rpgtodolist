@@ -1,5 +1,7 @@
 pipeline {
-    agent any
+    agent {
+        label 'wsl'
+    }
 
     parameters {
         string(name: 'DOCKERHUB_NAMESPACE', defaultValue: '', description: 'Docker Hub username or organization.')
@@ -8,6 +10,7 @@ pipeline {
 
     environment {
         REGISTRY      = 'https://index.docker.io/v1/'
+        SCM_CRED      = 'thana-wsl'
         IMAGE_NAME    = "${params.DOCKERHUB_NAMESPACE}/rpgtodolist-frontend"
         IMAGE_TAG     = "${env.BUILD_NUMBER}-${env.GIT_COMMIT?.take(7) ?: 'local'}"
         REGISTRY_CRED = 'registry-credentials'
@@ -16,12 +19,43 @@ pipeline {
     options {
         timeout(time: 30, unit: 'MINUTES')
         disableConcurrentBuilds()
+        skipDefaultCheckout(true)
     }
 
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                withCredentials([usernamePassword(credentialsId: SCM_CRED, usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
+                    sh '''
+                        cat > .git-askpass <<'EOF'
+#!/bin/sh
+case "$1" in
+    *Username*) printf '%s' "$GIT_USERNAME" ;;
+    *Password*) printf '%s' "$GIT_PASSWORD" ;;
+    *) printf '%s' "$GIT_PASSWORD" ;;
+esac
+EOF
+                        chmod 700 .git-askpass
+
+                        export GIT_ASKPASS="$PWD/.git-askpass"
+                        export GIT_TERMINAL_PROMPT=0
+
+                        if [ ! -d .git ]; then
+                            git init
+                        fi
+
+                        git remote remove origin 2>/dev/null || true
+                        git remote add origin https://github.com/ludwig-del/rpgtodolist.git
+                            git reset --hard HEAD 2>/dev/null || true
+                            git clean -fdx
+                        git fetch --prune origin +refs/heads/sun:refs/remotes/origin/sun
+                        git checkout -B sun refs/remotes/origin/sun
+                        git reset --hard refs/remotes/origin/sun
+                        git clean -fdx
+
+                        rm -f .git-askpass
+                    '''
+                }
             }
         }
 
@@ -36,19 +70,17 @@ pipeline {
         }
 
         stage('Test Frontend') {
-            agent {
-                docker {
-                    image 'node:20-alpine'
-                    args '--user root'
-                }
-            }
             steps {
-                dir('frontend') {
-                    sh '''
-                        npm ci --legacy-peer-deps
-                        npx react-scripts test --watchAll=false --ci --passWithNoTests
-                    '''
-                }
+                sh '''
+                    docker run --rm \
+                        -v "$PWD:/workspace" \
+                        -w /workspace/frontend \
+                        -e CI=true \
+                        node:20-alpine sh -lc '
+                            npm install --legacy-peer-deps
+                            npx react-scripts test --watchAll=false --ci --passWithNoTests
+                        '
+                '''
             }
         }
 
