@@ -1,489 +1,337 @@
-# RPG todolist — Daily Quest
+# RPG Todo List — Daily Quest
 
-> A gamified daily Todo List application themed around Elden Ring.
-> Select a boss each day, complete your tasks to deal damage, and defeat the boss before the day ends.
+> Gamified daily todo web application built with Flask and React, containerized with Docker, deployed to Kubernetes through Jenkins CI/CD, and monitored with Prometheus plus Grafana.
 
 ---
 
-## Table of Contents
+## Members
 
-- [Project Overview](#project-overview)
-- [Architecture Diagram](#architecture-diagram)
-- [Branching Strategy](#branching-strategy)
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
-- [Database Schema](#database-schema)
-- [API Endpoints](#api-endpoints)
-- [Running Locally](#running-locally)
-- [Kubernetes Deployment](#kubernetes-deployment)
-- [CI/CD Pipeline](#cicd-pipeline)
-- [Monitoring](#monitoring)
+| Student ID | Name | Responsibility |
+|------------|------|----------------|
+| Fill in | Fill in | Git and App Development |
+| Fill in | Fill in | Jenkins and Docker |
+| Fill in | Fill in | Terraform and Ansible |
+| Fill in | Fill in | Kubernetes and Monitoring |
 
 ---
 
 ## Project Overview
 
-This application is a **Gamified Daily Todo List** inspired by Elden Ring. The core gameplay loop works as follows:
+### Application
+- Name: RPG Todo List — Daily Quest
+- Type: Full-stack Web Application
+- Language / Framework: Python Flask, React
+- Description: This project turns a normal daily todo list into an Elden Ring themed quest system. Users select a boss for the day, add tasks, and reduce boss HP by completing todos until the daily quest is cleared.
 
-1. **Select a Daily Boss** — Choose from 7 bosses ordered by difficulty (number of tasks required)
-2. **Add Todos** — Create the tasks you need to complete today
-3. **Tick Complete** — Checking off a task deals damage to the boss (reduces HP)
-4. **Defeat the Boss** — Complete all required tasks to defeat the boss and clear the daily quest
-
-## Architecture Diagram
-
-```mermaid
-flowchart LR
-  User[User Browser] --> Frontend[React Frontend\nNodePort 30080]
-  Frontend --> Backend[Flask API\nNodePort 30500]
-  Backend --> Postgres[(PostgreSQL)]
-  Backend --> Metrics[/metrics]
-  Metrics --> Prometheus[Prometheus]
-  Prometheus --> Grafana[Grafana Dashboard]
-
-  GitHub[GitHub Repository] --> Webhook[GitHub Webhook]
-  Webhook --> Jenkins[Jenkins Pipeline]
-  Jenkins --> DockerHub[Docker Hub or Local Docker Cache]
-  Jenkins --> Terraform[Terraform]
-  Jenkins --> Ansible[Ansible]
-  Terraform --> K8s[Kubernetes Namespace]
-  Ansible --> K8s
-  DockerHub --> K8s
-  K8s --> Frontend
-  K8s --> Backend
-  K8s --> Postgres
+### Architecture Diagram
+```text
+Developer
+    │
+    ▼  git push
+ GitHub ───────────────▶ Jenkins CI/CD
+                            │
+                ┌───────────┼───────────────┐
+                ▼           ▼               ▼
+         Backend Build  Frontend Build   Deploy Pipeline
+                │           │               │
+                └─────── Docker Images ─────┘
+                                        │
+                                        ▼
+                             Terraform + Ansible
+                                        │
+                                        ▼
+                               Kubernetes Cluster
+                       ┌─────────────────────────────────┐
+                       │  Postgres StatefulSet           │
+                       │  Backend Deployment (2 pods)    │
+                       │  Frontend Deployment (2 pods)   │
+                       │  Services exposed by NodePort   │
+                       └─────────────────────────────────┘
+                                        │
+                        ┌───────────────┴───────────────┐
+                        ▼                               ▼
+                   Prometheus                        Grafana
+                  (scrape /metrics)            (dashboard panels)
 ```
 
-## Branching Strategy
+---
 
-This repository uses a simple branch model that matches the Jenkins setup used during grading:
-
-- `main` stores the stable baseline of the project.
-- `sun` is the active integration and demo branch used by the deploy pipeline.
-- `feature/<topic>` branches are created for isolated work, reviewed, then merged into `sun`.
-- After end-to-end validation on `sun`, the final state can be merged back into `main`.
-
-Recommended workflow:
+## Repository Structure
 
 ```text
-feature/* -> sun -> main
-```
-
-This keeps the branch that Jenkins watches aligned with the branch used for deployment demos, while preserving a clean stable branch for submission history.
-
-### Boss List & Task Requirements
-
-| Boss | Required Tasks |
-|------|---------------|
-| Malenia, Blade of Miquella | 1 |
-| Radagon of the Golden Order | 2 |
-| Mohg, Lord of Blood | 3 |
-| Godfrey, the First Elden Lord | 4 |
-| Starscourge Radahn | 5 |
-| Morgott, the Omen King | 6 |
-| Messmer the Impaler | 7 |
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | React 18, Framer Motion, Context API, Axios |
-| **Backend** | Python Flask, Flask-SQLAlchemy, Flask-Migrate |
-| **Database** | PostgreSQL 16 |
-| **Containerization** | Docker, Docker Compose |
-| **CI/CD** | Jenkins Pipeline |
-| **Orchestration** | Kubernetes, Terraform, Ansible |
-| **Monitoring** | Prometheus, Grafana |
-| **Registry** | Docker Hub |
-
----
-
-## Project Structure
-
-```
-Eldenring Project/
-├── terraform/                      # Terraform provisioning for Kubernetes resources
+rpgtodolist/
+├── backend/
+│   ├── app/
+│   ├── tests/
+│   ├── dockerfile
+│   ├── requirements.txt
+│   └── wsgi.py
+├── frontend/
+│   ├── public/
+│   ├── src/
+│   ├── dockerfile
+│   └── package.json
+├── jenkins/
+│   ├── Jenkinsfile_backend_build
+│   ├── Jenkinsfile_frontend_build
+│   └── Jenkinsfile_deploy
+├── terraform/
 │   ├── main.tf
 │   ├── variables.tf
-│   ├── outputs.tf
-│   └── README.md
-├── ansible/                        # Ansible deployment playbooks
+│   └── outputs.tf
+├── ansible/
 │   ├── backend/
 │   │   ├── deploy_backend.yml
 │   │   └── hosts.ini
 │   └── frontend/
 │       ├── deploy_frontend.yml
 │       └── hosts.ini
-├── k8s/                            # Kubernetes manifests
-│   ├── namespace.yaml
-│   ├── configmap.yaml
-│   ├── postgres-statefulset.yaml
+├── k8s/
 │   ├── backend-deployment.yaml
-│   └── frontend-deployment.yaml
+│   ├── frontend-deployment.yaml
+│   ├── postgres-statefulset.yaml
+│   ├── namespace.yaml
+│   └── configmap.yaml
 ├── monitoring/
-│   ├── prometheus.yml              # Prometheus scrape configuration
+│   ├── prometheus.yml
 │   └── grafana/
-│       ├── dashboards/             # Auto-loaded Grafana dashboards
-│       └── provisioning/           # Auto-loaded datasource/dashboard config
-├── backend/                        # Flask REST API
-│   ├── app/
-│   │   ├── __init__.py             # App factory + CLI commands
-│   │   ├── config.py               # Dev/Prod configuration
-│   │   ├── extensions.py           # SQLAlchemy, Migrate instances
-│   │   ├── models/                 # ORM Models
-│   │   │   ├── user.py             # User (Device ID-based, no login)
-│   │   │   ├── boss.py             # Boss data
-│   │   │   ├── daily_session.py    # Daily session + HP logic
-│   │   │   └── todo.py             # Todo items
-│   │   └── routes/                 # API Blueprints
-│   │       ├── daily.py            # Boss selection, session management
-│   │       └── todo.py             # CRUD + atomic tick
-│   ├── tests/                      # Pytest test suite
-│   ├── dockerfile                  # python:3.12-slim → gunicorn
-│   ├── requirements.txt
-│   └── wsgi.py
-├── frontend/                       # React Application
-│   ├── public/
-│   │   └── assets/
-│   │       ├── images/             # Drop boss .webp files here
-│   │       └── audio/              # Drop boss .mp3 files here
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Landing/            # Landing page + Play button
-│   │   │   ├── BossSelection/      # Boss selection screen
-│   │   │   ├── BossCard/           # Boss card (hover + audio fade)
-│   │   │   ├── Dashboard/          # Main game screen
-│   │   │   ├── HPBar/              # Animated boss HP bar
-│   │   │   └── TodoList/           # Todo management
-│   │   ├── context/
-│   │   │   └── GameContext.jsx     # Global state (useReducer)
-│   │   ├── services/
-│   │   │   └── api.js              # Axios client + Device ID header
-│   │   └── App.jsx                 # Route definitions
-│   ├── dockerfile                  # Multi-stage: Node build → Nginx serve
-│   └── package.json
-├── db/
-│   └── init.sql                    # Schema creation + boss seed data
-├── jenkins/                        # Jenkins pipelines used by backend/frontend/deploy jobs
-│   ├── Jenkinsfile_backend_build
-│   ├── Jenkinsfile_deploy
-│   └── Jenkinsfile_frontend_build
-├── docker-compose.yml              # Full local stack
+│       ├── dashboards/
+│       └── provisioning/
+├── docker-compose.yml
 └── README.md
 ```
 
 ---
 
-## Database Schema
+## Prerequisites
 
-### `users` table
-| Column | Type | Description |
-|--------|------|-------------|
-| id | SERIAL PK | User ID |
-| device_id | VARCHAR(36) UNIQUE | Browser-generated UUID (no login required) |
-| created_at | TIMESTAMPTZ | Creation timestamp |
-
-### `bosses` table
-| Column | Type | Description |
-|--------|------|-------------|
-| id | SERIAL PK | Boss ID |
-| name | VARCHAR(100) | Boss name |
-| required_todos | INTEGER | Number of tasks required to defeat |
-| image_path | VARCHAR | Path to boss image asset |
-| audio_path | VARCHAR | Path to boss theme audio |
-| difficulty_order | INTEGER | Sort order (easiest to hardest) |
-
-### `daily_sessions` table
-| Column | Type | Description |
-|--------|------|-------------|
-| id | SERIAL PK | Session ID |
-| user_id | FK → users | Session owner |
-| boss_id | FK → bosses | Selected boss |
-| session_date | DATE | One session per user per day (unique constraint) |
-| required_todos | INTEGER | Tasks needed to clear |
-| current_todos_done | INTEGER | Tasks completed so far |
-| is_cleared | BOOLEAN | Whether the boss is defeated |
-| cleared_at | TIMESTAMPTZ | Timestamp of boss defeat |
-
-> **Race Condition Prevention:** The tick endpoint uses a single atomic SQL statement to prevent double-counting from rapid consecutive clicks:
-> ```sql
-> UPDATE daily_sessions
-> SET current_todos_done = current_todos_done + 1,
->     is_cleared = CASE WHEN current_todos_done + 1 >= required_todos THEN TRUE ELSE FALSE END
-> WHERE id = :id AND is_cleared = FALSE
-> ```
-
-### `todos` table
-| Column | Type | Description |
-|--------|------|-------------|
-| id | SERIAL PK | Todo ID |
-| session_id | FK → daily_sessions | Parent session |
-| task_name | VARCHAR(255) | Task description |
-| status | ENUM(pending, done) | Completion status |
-| created_at | TIMESTAMPTZ | Creation timestamp |
-| completed_at | TIMESTAMPTZ | Completion timestamp |
+| Tool | Version | Purpose |
+|------|---------|---------|
+| Git | 2.x+ | Source control |
+| Docker Desktop | 24.x+ | Containers and local runtime |
+| Jenkins | 2.5xx | CI/CD automation |
+| Terraform | 1.6+ | Provision Kubernetes resources |
+| Ansible | 2.15+ | Deployment orchestration |
+| kubectl | 1.28+ | Kubernetes CLI |
+| Kubernetes | Docker Desktop / kind | Cluster runtime |
+| Prometheus | 2.x+ | Metrics collection |
+| Grafana | 10.x+ | Monitoring dashboard |
 
 ---
 
-## API Endpoints
+## Quick Start
 
-### Daily Session
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/daily/bosses` | Get all bosses ordered by difficulty |
-| GET | `/api/daily/session` | Get today's active session |
-| POST | `/api/daily/select-boss` | Lock in today's boss (one per day) |
-| GET | `/api/daily/history` | Get last 30 days of session history |
-
-### Todo
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/todo/` | Get all todos for today's session |
-| POST | `/api/todo/` | Create a new todo |
-| PATCH | `/api/todo/tick/:id` | Mark todo as done (atomically reduces boss HP) |
-| DELETE | `/api/todo/:id` | Delete a pending todo |
-
-> All requests must include the header `X-Device-ID: <uuid>` to identify the user.
-
----
-
-## Running Locally
-
-### Prerequisites
-
-- Docker Desktop (must be running)
-
-### Start the App
-
+### 1. Clone Repository
 ```bash
-# Clone the repository
-git clone https://github.com/YOUR_USERNAME/eldenring-todo.git
-cd eldenring-todo
-
-# Build and start all services (first run takes 3-5 minutes)
-docker compose up --build
+git clone https://github.com/ludwig-del/rpgtodolist.git
+cd rpgtodolist
 ```
 
-### Service URLs
-
-| Service | URL |
-|---------|-----|
-| Application | http://localhost:3002 |
-| Backend API | http://localhost:5000 |
-| Prometheus | http://localhost:9090 |
-| Grafana | http://localhost:3003 (admin / admin) |
-
-### Stop the App
-
+### 2. Run Locally with Docker Compose
 ```bash
-# Stop but keep data
+docker compose up -d --build
+```
+
+### 3. Local Service URLs
+```text
+Frontend App   : http://localhost:3002
+Backend API    : http://localhost:5000
+Prometheus     : http://localhost:9090
+Grafana        : http://localhost:3003
+```
+
+### 4. Stop the Stack
+```bash
 docker compose down
-
-# Stop and wipe all data (full reset)
-docker compose down -v
 ```
 
-### Adding Boss Assets
+---
 
-Place your files in the correct folders:
+## CI/CD Pipeline (Jenkins)
 
-```
-frontend/public/assets/images/   ← boss image files (.webp)
-frontend/public/assets/audio/    ← boss theme files (.mp3)
-```
+### Pipeline Flow
 
-Required filenames:
-
-```
-malenia.webp    radagon.webp    mohg.webp      godfrey.webp
-radahn.webp     morgott.webp    messmer.webp
-
-malenia_theme.mp3    radagon_theme.mp3    mohg_theme.mp3    godfrey_theme.mp3
-radahn_theme.mp3     morgott_theme.mp3    messmer_theme.mp3
+```text
+Checkout -> Validate Parameters -> Terraform Init -> Terraform Apply -> Deploy Backend -> Deploy Frontend
 ```
 
-After adding files, rebuild:
+### Jenkins Pipelines Used in This Project
+
+| Pipeline File | Purpose |
+|---------------|---------|
+| `jenkins/Jenkinsfile_backend_build` | Test backend and build/push backend image |
+| `jenkins/Jenkinsfile_frontend_build` | Test frontend and build/push frontend image |
+| `jenkins/Jenkinsfile_deploy` | Terraform + Ansible deployment pipeline |
+
+### Deploy Pipeline Stages
+
+| Stage | Description |
+|-------|-------------|
+| Checkout | Fetch latest code from GitHub branch `sun` |
+| Validate Parameters | Resolve image tag and namespace settings |
+| Terraform Init | Initialize Terraform provider and working state |
+| Terraform Apply | Import existing resources and apply infrastructure changes |
+| Deploy Backend | Run backend Ansible rollout |
+| Deploy Frontend | Run frontend Ansible rollout |
+
+### Jenkins Setup Notes
+1. Create jobs for backend build, frontend build, and deploy.
+2. Point the jobs to this repository and branch `sun`.
+3. Add credentials for GitHub, Docker Hub, and kubeconfig.
+4. Webhook is optional for this project; manual trigger in Jenkins is acceptable for demo and grading.
+
+---
+
+## Infrastructure as Code
+
+### Terraform — Provision Infrastructure
 ```bash
-docker compose up --build
+cd terraform
+terraform init
+terraform plan
+terraform apply
 ```
+
+Terraform provisions:
+- Kubernetes namespace
+- ConfigMap and Secret
+- PostgreSQL service and StatefulSet
+- Backend deployment and service
+- Frontend deployment and service
+
+### Ansible — Deploy Application Changes
+```bash
+ansible-playbook -i ansible/backend/hosts.ini ansible/backend/deploy_backend.yml
+ansible-playbook -i ansible/frontend/hosts.ini ansible/frontend/deploy_frontend.yml
+```
+
+Ansible performs:
+- rollout readiness check for Postgres and existing deployments
+- backend image patch for container and initContainer
+- frontend image update
+- rollout status verification for both services
+
+> In the actual Jenkins deploy pipeline, Terraform and Ansible are executed automatically. They do not need to be run manually during normal CI/CD flow.
 
 ---
 
 ## Kubernetes Deployment
 
-The repository includes two deployment paths:
-
-1. `k8s/` manifests for direct `kubectl apply`
-2. `terraform/` + `ansible/` for the Jenkins deploy pipeline
-
-### 1. Prepare a Kubernetes Cluster
-
-Any local cluster that exposes NodePort services works. During validation this project was run on Docker Desktop Kubernetes.
-
+### Apply Manifests Manually
 ```bash
-kubectl cluster-info
-kubectl get nodes
-```
-
-### 2. Manual Manifest Deployment
-
-The static manifests in `k8s/` default to the local image tags `rpgtodolist-backend:latest` and `rpgtodolist-frontend:latest`. Build them first when using Docker Desktop Kubernetes:
-
-```bash
-docker build -t rpgtodolist-backend:latest -f backend/dockerfile backend
-docker build -t rpgtodolist-frontend:latest -f frontend/dockerfile frontend
-```
-
-If you want to deploy images from Docker Hub instead, replace those image tags in the manifests before applying them.
-
-```bash
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/postgres-statefulset.yaml
 kubectl apply -f k8s/backend-deployment.yaml
 kubectl apply -f k8s/frontend-deployment.yaml
 ```
 
-### 3. Verify Resources
-
+### Check Runtime Status
 ```bash
 kubectl get pods -n eldenring
-kubectl get services -n eldenring
-kubectl rollout status deployment/eldenring-backend -n eldenring
-kubectl rollout status deployment/eldenring-frontend -n eldenring
+kubectl get svc -n eldenring
 ```
 
-### 4. Open the App Through NodePort
-
-For Docker Desktop Kubernetes you can open the services directly from the host:
-
+### Expected Access
 ```text
-Frontend: http://localhost:30080
-Backend:  http://localhost:30500
+Frontend NodePort : http://localhost:30080
+Backend Metrics   : http://localhost:30500/metrics
 ```
-
-### NodePort Reference
-
-| Service | NodePort |
-|---------|----------|
-| Frontend | 30080 |
-| Backend API | 30500 |
-
----
-
-## CI/CD Pipeline
-
-### Pipeline Flow
-
-```
-Push to GitHub
-    └── Webhook triggers Jenkins
-  ├── Stage 1: Checkout
-  ├── Stage 2: Validate Parameters
-  ├── Stage 3: Build + Test
-  ├── Stage 4: Docker Build + Push Image
-  ├── Stage 5: Terraform + Ansible
-  └── Stage 6: Kubernetes Deploy
-```
-
-The project keeps Jenkins pipelines under `jenkins/` so you can run separate backend, frontend, or deploy jobs.
-
-### Jenkins Setup
-
-```bash
-# Run Jenkins in Docker
-docker run -d --name jenkins -p 8080:8080 \
-  -v jenkins_home:/var/jenkins_home \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  jenkins/jenkins:lts
-```
-
-Pipeline script path:
-
-```text
-jenkins/Jenkinsfile_deploy
-```
-
-Required Jenkins credentials:
-
-| Credential ID | Type | Purpose |
-|--------------|------|---------|
-| `registry-credentials` | Username/Password | Docker Hub login |
-| `kubeconfig-prod` | Secret File | kubectl access to cluster |
-
-Terraform requirement:
-
-- The repository contains a real `terraform/` implementation that provisions the namespace, config, secret, PostgreSQL StatefulSet, and frontend/backend services and deployments.
-- Jenkins runs Terraform inside `hashicorp/terraform:1.9.8`, then runs Ansible playbooks to patch deployment images and verify rollouts.
-- The deploy pipeline supports both Docker Hub images and local Docker Desktop images when `DOCKERHUB_NAMESPACE` is left blank.
-
-### GitHub Webhook
-
-- **Payload URL:** `http://<JENKINS_URL>/github-webhook/`
-- **Content Type:** `application/json`
-- **Trigger:** Push event
-
-Every push to the branch configured in the Jenkins job triggers the full pipeline. In the current validation setup, the deploy job reads `jenkins/Jenkinsfile_deploy` from branch `sun`.
-
-### Submission Checklist
-
-Use this checklist before the final demo or grading run.
-
-- [ ] Push the latest code to the Jenkins-watched branch (`sun` in the current setup).
-- [ ] Confirm the GitHub webhook is active and Jenkins receives push events.
-- [ ] Run the deploy pipeline and verify all 6 stages succeed.
-- [ ] If manual Kubernetes deployment is used, build the local images before `kubectl apply`.
-- [ ] Verify `kubectl get pods -n eldenring` shows backend, frontend, and postgres in `Running` state.
-- [ ] Verify the app is reachable on `http://localhost:30080` and the backend on `http://localhost:30500`.
-- [ ] Verify `http://localhost:5000/metrics` responds locally or through the cluster backend service.
-- [ ] Verify Prometheus targets are `UP` and Grafana dashboard panels show live data.
-- [ ] Keep one short demo path ready: `git push` -> Jenkins run -> rollout status -> open app.
-- [ ] Be ready to explain why Terraform provisions base resources and Ansible performs rollout updates.
 
 ---
 
 ## Monitoring
 
 ### Prometheus
+- Config file: `monitoring/prometheus.yml`
+- Metrics endpoint: `/metrics`
+- Scrape target includes the backend application
 
-The backend exposes metrics at `/metrics` via `prometheus-flask-exporter`. Prometheus scrapes this endpoint automatically.
+### Grafana
+- Dashboard file: `monitoring/grafana/dashboards/eldenring-overview.json`
+- Provisioning path: `monitoring/grafana/provisioning/`
+- Default local URL: `http://localhost:3003`
 
-Prometheus config path:
+### Dashboard Panels
+
+| Panel | Meaning |
+|-------|---------|
+| Request Rate | Backend request throughput |
+| p95 Latency | Backend request latency |
+| Backend Memory | Memory usage of the Flask backend |
+| Total Requests | Accumulated request count |
+
+---
+
+## Branching Strategy
 
 ```text
-monitoring/prometheus.yml
+feature/* -> sun -> main
 ```
 
+| Branch | Purpose |
+|--------|---------|
+| `main` | Stable project branch |
+| `sun` | Active integration and Jenkins demo branch |
+| `feature/*` | Individual development branches |
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/auth/register` | Register user account |
+| `POST` | `/api/auth/login` | Login and receive JWT |
+| `GET` | `/api/daily/bosses` | Get available bosses |
+| `POST` | `/api/daily/select-boss` | Select boss for the day |
+| `GET` | `/api/daily/session` | Get current daily session |
+| `GET` | `/api/todo/` | Get current todos |
+| `POST` | `/api/todo/` | Create todo |
+| `PATCH` | `/api/todo/tick/<id>` | Mark todo as done |
+| `DELETE` | `/api/todo/<id>` | Delete todo |
+| `GET` | `/metrics` | Prometheus metrics endpoint |
+
+---
+
+## Troubleshooting
+
+**Docker Desktop or Kubernetes does not start correctly**
 ```bash
-# View raw metrics
+docker ps
+kubectl get pods -A
+```
+
+**Jenkins cannot reach the cluster**
+```bash
+kubectl get pods -n default
+kubectl get svc -n default
+```
+
+**Prometheus target is DOWN**
+```bash
 curl http://localhost:5000/metrics
 ```
 
-### Grafana
-
-Grafana is available at `http://localhost:3003` with login `admin / admin`.
-
-It is provisioned automatically with:
-
-1. A default `Prometheus` datasource pointing to `http://prometheus:9090`
-2. An `Eldenring Backend Overview` dashboard that shows request rate, p95 latency, memory usage, and total requests
-
-Provisioning files live under:
-
-```text
-monitoring/grafana/
+**Frontend or backend not reachable after deploy**
+```bash
+kubectl get svc -n eldenring
+kubectl rollout status deployment/eldenring-backend -n eldenring
+kubectl rollout status deployment/eldenring-frontend -n eldenring
 ```
 
 ---
 
-## Authentication System
+## References
 
-This app requires **no login or registration**. On first visit, the browser generates a UUID and stores it in `localStorage` as `device_id`. Every API request includes this as an `X-Device-ID` header, allowing the backend to identify and persist data per device automatically.
+- [Jenkins Pipeline Syntax](https://www.jenkins.io/doc/book/pipeline/syntax/)
+- [Terraform Documentation](https://developer.hashicorp.com/terraform/docs)
+- [Ansible Documentation](https://docs.ansible.com/)
+- [Kubernetes Documentation](https://kubernetes.io/docs/)
+- [Prometheus Documentation](https://prometheus.io/docs/)
+- [Grafana Documentation](https://grafana.com/docs/)
 
 ---
 
-*This project was built for the Serverless & Cloud Computing course — Semester 6*
+## Submission Information
+
+- Course: ENG23 3074 — Serverless and Cloud Architectures
+- Instructor: Dr. Nuntawut Ko Kung (AFHEA)
+- Department: Computer Engineering
