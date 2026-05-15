@@ -1,6 +1,7 @@
 from datetime import date
 
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 
 from ..extensions import db
 from ..models import Boss, DailySession, User
@@ -9,6 +10,11 @@ daily_bp = Blueprint("daily", __name__)
 
 
 def _get_or_create_user() -> User | None:
+    verify_jwt_in_request(optional=True)
+    identity = get_jwt_identity()
+    if identity is not None:
+        return User.query.get(int(identity))
+
     device_id = request.headers.get("X-Device-ID", "").strip()
     if not device_id:
         return None

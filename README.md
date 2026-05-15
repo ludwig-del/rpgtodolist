@@ -8,6 +8,8 @@
 ## Table of Contents
 
 - [Project Overview](#project-overview)
+- [Architecture Diagram](#architecture-diagram)
+- [Branching Strategy](#branching-strategy)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Database Schema](#database-schema)
@@ -27,6 +29,47 @@ This application is a **Gamified Daily Todo List** inspired by Elden Ring. The c
 2. **Add Todos** — Create the tasks you need to complete today
 3. **Tick Complete** — Checking off a task deals damage to the boss (reduces HP)
 4. **Defeat the Boss** — Complete all required tasks to defeat the boss and clear the daily quest
+
+## Architecture Diagram
+
+```mermaid
+flowchart LR
+  User[User Browser] --> Frontend[React Frontend\nNodePort 30080]
+  Frontend --> Backend[Flask API\nNodePort 30500]
+  Backend --> Postgres[(PostgreSQL)]
+  Backend --> Metrics[/metrics]
+  Metrics --> Prometheus[Prometheus]
+  Prometheus --> Grafana[Grafana Dashboard]
+
+  GitHub[GitHub Repository] --> Webhook[GitHub Webhook]
+  Webhook --> Jenkins[Jenkins Pipeline]
+  Jenkins --> DockerHub[Docker Hub or Local Docker Cache]
+  Jenkins --> Terraform[Terraform]
+  Jenkins --> Ansible[Ansible]
+  Terraform --> K8s[Kubernetes Namespace]
+  Ansible --> K8s
+  DockerHub --> K8s
+  K8s --> Frontend
+  K8s --> Backend
+  K8s --> Postgres
+```
+
+## Branching Strategy
+
+This repository uses a simple branch model that matches the Jenkins setup used during grading:
+
+- `main` stores the stable baseline of the project.
+- `sun` is the active integration and demo branch used by the deploy pipeline.
+- `feature/<topic>` branches are created for isolated work, reviewed, then merged into `sun`.
+- After end-to-end validation on `sun`, the final state can be merged back into `main`.
+
+Recommended workflow:
+
+```text
+feature/* -> sun -> main
+```
+
+This keeps the branch that Jenkins watches aligned with the branch used for deployment demos, while preserving a clean stable branch for submission history.
 
 ### Boss List & Task Requirements
 
@@ -51,7 +94,7 @@ This application is a **Gamified Daily Todo List** inspired by Elden Ring. The c
 | **Database** | PostgreSQL 16 |
 | **Containerization** | Docker, Docker Compose |
 | **CI/CD** | Jenkins Pipeline |
-| **Orchestration** | Kubernetes (Minikube), NodePort Service |
+| **Orchestration** | Kubernetes, Terraform, Ansible |
 | **Monitoring** | Prometheus, Grafana |
 | **Registry** | Docker Hub |
 
@@ -61,6 +104,29 @@ This application is a **Gamified Daily Todo List** inspired by Elden Ring. The c
 
 ```
 Eldenring Project/
+├── terraform/                      # Terraform provisioning for Kubernetes resources
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── outputs.tf
+│   └── README.md
+├── ansible/                        # Ansible deployment playbooks
+│   ├── backend/
+│   │   ├── deploy_backend.yml
+│   │   └── hosts.ini
+│   └── frontend/
+│       ├── deploy_frontend.yml
+│       └── hosts.ini
+├── k8s/                            # Kubernetes manifests
+│   ├── namespace.yaml
+│   ├── configmap.yaml
+│   ├── postgres-statefulset.yaml
+│   ├── backend-deployment.yaml
+│   └── frontend-deployment.yaml
+├── monitoring/
+│   ├── prometheus.yml              # Prometheus scrape configuration
+│   └── grafana/
+│       ├── dashboards/             # Auto-loaded Grafana dashboards
+│       └── provisioning/           # Auto-loaded datasource/dashboard config
 ├── backend/                        # Flask REST API
 │   ├── app/
 │   │   ├── __init__.py             # App factory + CLI commands
@@ -100,18 +166,12 @@ Eldenring Project/
 │   └── package.json
 ├── db/
 │   └── init.sql                    # Schema creation + boss seed data
-├── infrastructure/
-│   └── k8s/                        # Kubernetes manifests
-│       ├── namespace.yaml
-│       ├── configmap.yaml
-│       ├── postgres-statefulset.yaml
-│       ├── backend-deployment.yaml  # NodePort 30500
-│       └── frontend-deployment.yaml # NodePort 30080
-├── monitoring/
-│   └── prometheus/
-│       └── prometheus.yml
+├── jenkins/                        # Jenkins pipelines used by backend/frontend/deploy jobs
+│   ├── Jenkinsfile_backend_build
+│   ├── Jenkinsfile_deploy
+│   └── Jenkinsfile_frontend_build
 ├── docker-compose.yml              # Full local stack
-└── Jenkinsfile                     # CI/CD pipeline definition
+└── README.md
 ```
 
 ---
@@ -255,34 +315,55 @@ docker compose up --build
 
 ## Kubernetes Deployment
 
-### 1. Start Minikube
+The repository includes two deployment paths:
+
+1. `k8s/` manifests for direct `kubectl apply`
+2. `terraform/` + `ansible/` for the Jenkins deploy pipeline
+
+### 1. Prepare a Kubernetes Cluster
+
+Any local cluster that exposes NodePort services works. During validation this project was run on Docker Desktop Kubernetes.
 
 ```bash
-minikube start --driver=docker --cpus=2 --memory=4096
-minikube status
+kubectl cluster-info
+kubectl get nodes
 ```
 
-### 2. Apply Manifests
+### 2. Manual Manifest Deployment
+
+The static manifests in `k8s/` default to the local image tags `rpgtodolist-backend:latest` and `rpgtodolist-frontend:latest`. Build them first when using Docker Desktop Kubernetes:
 
 ```bash
-kubectl apply -f infrastructure/k8s/namespace.yaml
-kubectl apply -f infrastructure/k8s/configmap.yaml
-kubectl apply -f infrastructure/k8s/postgres-statefulset.yaml
-kubectl apply -f infrastructure/k8s/backend-deployment.yaml
-kubectl apply -f infrastructure/k8s/frontend-deployment.yaml
+docker build -t rpgtodolist-backend:latest -f backend/dockerfile backend
+docker build -t rpgtodolist-frontend:latest -f frontend/dockerfile frontend
 ```
 
-### 3. Verify Pods
+If you want to deploy images from Docker Hub instead, replace those image tags in the manifests before applying them.
+
+```bash
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/postgres-statefulset.yaml
+kubectl apply -f k8s/backend-deployment.yaml
+kubectl apply -f k8s/frontend-deployment.yaml
+```
+
+### 3. Verify Resources
 
 ```bash
 kubectl get pods -n eldenring
 kubectl get services -n eldenring
+kubectl rollout status deployment/eldenring-backend -n eldenring
+kubectl rollout status deployment/eldenring-frontend -n eldenring
 ```
 
-### 4. Open the App
+### 4. Open the App Through NodePort
 
-```bash
-minikube service eldenring-frontend-svc -n eldenring
+For Docker Desktop Kubernetes you can open the services directly from the host:
+
+```text
+Frontend: http://localhost:30080
+Backend:  http://localhost:30500
 ```
 
 ### NodePort Reference
@@ -301,12 +382,15 @@ minikube service eldenring-frontend-svc -n eldenring
 ```
 Push to GitHub
     └── Webhook triggers Jenkins
-            ├── Stage 1: Checkout
-            ├── Stage 2: Test Backend (pytest)
-            ├── Stage 3: Test Frontend (npm test)
-            ├── Stage 4: Build & Push Docker Images to Docker Hub
-            └── Stage 5: kubectl set image → Rolling deploy to Kubernetes
+  ├── Stage 1: Checkout
+  ├── Stage 2: Validate Parameters
+  ├── Stage 3: Build + Test
+  ├── Stage 4: Docker Build + Push Image
+  ├── Stage 5: Terraform + Ansible
+  └── Stage 6: Kubernetes Deploy
 ```
+
+The project keeps Jenkins pipelines under `jenkins/` so you can run separate backend, frontend, or deploy jobs.
 
 ### Jenkins Setup
 
@@ -318,6 +402,12 @@ docker run -d --name jenkins -p 8080:8080 \
   jenkins/jenkins:lts
 ```
 
+Pipeline script path:
+
+```text
+jenkins/Jenkinsfile_deploy
+```
+
 Required Jenkins credentials:
 
 | Credential ID | Type | Purpose |
@@ -325,13 +415,34 @@ Required Jenkins credentials:
 | `registry-credentials` | Username/Password | Docker Hub login |
 | `kubeconfig-prod` | Secret File | kubectl access to cluster |
 
+Terraform requirement:
+
+- The repository contains a real `terraform/` implementation that provisions the namespace, config, secret, PostgreSQL StatefulSet, and frontend/backend services and deployments.
+- Jenkins runs Terraform inside `hashicorp/terraform:1.9.8`, then runs Ansible playbooks to patch deployment images and verify rollouts.
+- The deploy pipeline supports both Docker Hub images and local Docker Desktop images when `DOCKERHUB_NAMESPACE` is left blank.
+
 ### GitHub Webhook
 
 - **Payload URL:** `http://<JENKINS_URL>/github-webhook/`
 - **Content Type:** `application/json`
 - **Trigger:** Push event
 
-Every push to the `main` branch automatically triggers the full pipeline.
+Every push to the branch configured in the Jenkins job triggers the full pipeline. In the current validation setup, the deploy job reads `jenkins/Jenkinsfile_deploy` from branch `sun`.
+
+### Submission Checklist
+
+Use this checklist before the final demo or grading run.
+
+- [ ] Push the latest code to the Jenkins-watched branch (`sun` in the current setup).
+- [ ] Confirm the GitHub webhook is active and Jenkins receives push events.
+- [ ] Run the deploy pipeline and verify all 6 stages succeed.
+- [ ] If manual Kubernetes deployment is used, build the local images before `kubectl apply`.
+- [ ] Verify `kubectl get pods -n eldenring` shows backend, frontend, and postgres in `Running` state.
+- [ ] Verify the app is reachable on `http://localhost:30080` and the backend on `http://localhost:30500`.
+- [ ] Verify `http://localhost:5000/metrics` responds locally or through the cluster backend service.
+- [ ] Verify Prometheus targets are `UP` and Grafana dashboard panels show live data.
+- [ ] Keep one short demo path ready: `git push` -> Jenkins run -> rollout status -> open app.
+- [ ] Be ready to explain why Terraform provisions base resources and Ansible performs rollout updates.
 
 ---
 
@@ -341,6 +452,12 @@ Every push to the `main` branch automatically triggers the full pipeline.
 
 The backend exposes metrics at `/metrics` via `prometheus-flask-exporter`. Prometheus scrapes this endpoint automatically.
 
+Prometheus config path:
+
+```text
+monitoring/prometheus.yml
+```
+
 ```bash
 # View raw metrics
 curl http://localhost:5000/metrics
@@ -348,10 +465,18 @@ curl http://localhost:5000/metrics
 
 ### Grafana
 
-1. Open http://localhost:3003
-2. Login: `admin` / `admin`
-3. Add Data Source → Prometheus → URL: `http://prometheus:9090`
-4. Import Dashboard ID `11159` for Flask application metrics
+Grafana is available at `http://localhost:3003` with login `admin / admin`.
+
+It is provisioned automatically with:
+
+1. A default `Prometheus` datasource pointing to `http://prometheus:9090`
+2. An `Eldenring Backend Overview` dashboard that shows request rate, p95 latency, memory usage, and total requests
+
+Provisioning files live under:
+
+```text
+monitoring/grafana/
+```
 
 ---
 

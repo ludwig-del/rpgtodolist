@@ -1,0 +1,148 @@
+pipeline {
+    agent {
+        label 'wsl'
+    }
+
+    parameters {
+        string(name: 'DOCKERHUB_NAMESPACE', defaultValue: '', description: 'Docker Hub username or organization.')
+        booleanParam(name: 'PUSH_IMAGE', defaultValue: false, description: 'Build and push the backend image.')
+    }
+
+    environment {
+        REGISTRY      = 'https://index.docker.io/v1/'
+        SCM_CRED      = 'thana-wsl'
+        IMAGE_NAME    = "${params.DOCKERHUB_NAMESPACE}/rpgtodolist-backend"
+        IMAGE_TAG     = 'local'
+        REGISTRY_CRED = 'registry-credentials'
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        skipDefaultCheckout(true)
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: SCM_CRED, usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
+                    sh '''
+                        cat > .git-askpass <<'EOF'
+#!/bin/sh
+case "$1" in
+    *Username*) printf '%s' "$GIT_USERNAME" ;;
+    *Password*) printf '%s' "$GIT_PASSWORD" ;;
+    *) printf '%s' "$GIT_PASSWORD" ;;
+esac
+EOF
+                        chmod 700 .git-askpass
+
+                        export GIT_ASKPASS="$PWD/.git-askpass"
+                        export GIT_TERMINAL_PROMPT=0
+
+                        if [ ! -d .git ]; then
+                            git init
+                        fi
+
+                        git remote remove origin 2>/dev/null || true
+                        git remote add origin https://github.com/ludwig-del/rpgtodolist.git
+                        git reset --hard HEAD 2>/dev/null || true
+                        git clean -fdx
+                        git fetch --prune origin +refs/heads/sun:refs/remotes/origin/sun
+                        git checkout -B sun refs/remotes/origin/sun
+                        git reset --hard refs/remotes/origin/sun
+                        git clean -fdx
+
+                        rm -f .git-askpass
+                    '''
+                }
+                script {
+                    env.IMAGE_TAG = "${env.BUILD_NUMBER}-${sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()}"
+                }
+            }
+        }
+
+        stage('Validate Parameters') {
+            steps {
+                script {
+                    if (params.PUSH_IMAGE && !params.DOCKERHUB_NAMESPACE?.trim()) {
+                        error('DOCKERHUB_NAMESPACE is required when PUSH_IMAGE is enabled.')
+                    }
+                }
+            }
+        }
+
+        stage('Test Backend') {
+            steps {
+                sh '''
+                    docker run --rm \
+                        --user "$(id -u):$(id -g)" \
+                        -e HOME=/tmp \
+                        -v "$PWD:/workspace" \
+                        -w /workspace/backend \
+                        python:3.12-slim sh -eu -c "python -m venv /tmp/venv && . /tmp/venv/bin/activate && pip install -q -r requirements.txt pytest pytest-cov && pytest tests/ -v --tb=short --junitxml=test-results.xml --cov=app --cov-report=xml:coverage.xml"
+                '''
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'backend/test-results.xml'
+                    archiveArtifacts artifacts: 'backend/coverage.xml', fingerprint: true, onlyIfSuccessful: false
+                }
+            }
+        }
+
+        stage('Build & Push Backend Image') {
+            when {
+                expression { params.PUSH_IMAGE }
+            }
+            steps {
+                script {
+                    def workspaceDir = pwd().trim()
+                    def backendImageRef = "${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+                    def backendContext = "${workspaceDir}/backend"
+                    withCredentials([usernamePassword(credentialsId: REGISTRY_CRED, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                        writeFile file: 'backend_image.py', text: """import os
+import subprocess
+
+backend_image_ref = ${groovy.json.JsonOutput.toJson(backendImageRef)}.strip()
+backend_context = ${groovy.json.JsonOutput.toJson(backendContext)}.strip()
+latest_image_ref = ${groovy.json.JsonOutput.toJson(env.IMAGE_NAME + ':latest')}.strip()
+registry = os.environ['REGISTRY'].strip()
+docker_username = os.environ['DOCKER_USERNAME']
+docker_password = os.environ['DOCKER_PASSWORD']
+
+
+subprocess.run([
+    'docker', 'run', '--rm',
+    '-v', '/var/run/docker.sock:/var/run/docker.sock',
+    '-v', f'{backend_context}:/context',
+    '-w', '/context',
+    '-e', f'DOCKER_USERNAME={docker_username}',
+    '-e', f'DOCKER_PASSWORD={docker_password}',
+    '-e', f'REGISTRY={registry}',
+    '-e', f'IMAGE_REF={backend_image_ref}',
+    '-e', f'LATEST_IMAGE_REF={latest_image_ref}',
+    'docker:27-cli',
+    'sh', '-eu', '-c',
+    'printf "%s" "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin "$REGISTRY"; '
+    'docker build -t "$IMAGE_REF" -f dockerfile .; '
+    'docker push "$IMAGE_REF"; '
+    'docker tag "$IMAGE_REF" "$LATEST_IMAGE_REF"; '
+    'docker push "$LATEST_IMAGE_REF"; '
+    'docker logout "$REGISTRY" || true',
+    'docker-build-wrapper'
+], check=True)
+""".replace('\r', '')
+                        sh 'python3 backend_image.py'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            deleteDir()
+        }
+    }
+}
