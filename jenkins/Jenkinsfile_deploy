@@ -120,6 +120,7 @@ EOF
                             docker run --rm \
                                 --user "$(id -u):$(id -g)" \
                                 -v "$PWD:/workspace" \
+                                --mount type=volume,target=/workspace/frontend/node_modules \
                                 -w /workspace/frontend \
                                 -e CI=true \
                                     node:20-alpine sh -eu -c "npm install --legacy-peer-deps && npx react-scripts test --watchAll=false --ci --passWithNoTests"
