@@ -128,7 +128,7 @@ subprocess.run([
     '-e', f"TF_VAR_backend_image={os.environ['BACKEND_IMAGE']}",
     '-e', f"TF_VAR_frontend_image={os.environ['FRONTEND_IMAGE']}",
     'hashicorp/terraform:1.9.8',
-    '-eu', '-c', 'terraform init'
+    '-eu', '-c', 'terraform init', 'terraform-init-wrapper'
 ], check=True)
 '''.replace('\r', '')
                         sh 'python3 terraform_init.py'
@@ -200,7 +200,7 @@ subprocess.run([
     '-e', f'TF_VAR_postgres_password={postgres_password}',
     '-e', f'TF_VAR_secret_key={secret_key}',
     'hashicorp/terraform:1.9.8',
-    '-eu', '-c', terraform_script
+    '-eu', '-c', terraform_script, 'terraform-apply-wrapper'
 ], check=True)
 '''.replace('\r', '')
                         sh 'python3 terraform_apply.py'
