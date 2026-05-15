@@ -30,6 +30,27 @@
   gap: 1rem;
 }
 
+.dashboard__reset-btn {
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  color: #7a3a2a;
+  border: 1px solid #4a2018;
+  padding: 0.35rem 0.7rem;
+  transition: color 0.2s, border-color 0.2s;
+  background: none;
+  white-space: nowrap;
+}
+
+.dashboard__reset-btn:hover:not(:disabled) {
+  color: #e74c3c;
+  border-color: #c0392b;
+}
+
+.dashboard__reset-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .dashboard__inv-btn {
   position: relative;
   font-size: 0.72rem;

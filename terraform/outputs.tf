@@ -1,19 +1,34 @@
-output "namespace" {
-  description = "Provisioned Kubernetes namespace."
-  value       = kubernetes_namespace_v1.app.metadata[0].name
+output "app_url" {
+  description = "Frontend application URL"
+  value       = "http://localhost:3002"
 }
 
-output "backend_service" {
-  description = "Backend service name."
-  value       = kubernetes_service_v1.backend.metadata[0].name
+output "api_url" {
+  description = "Backend API URL"
+  value       = "http://localhost:5000"
 }
 
-output "frontend_service" {
-  description = "Frontend service name."
-  value       = kubernetes_service_v1.frontend.metadata[0].name
+output "prometheus_url" {
+  description = "Prometheus metrics UI"
+  value       = "http://localhost:9090"
 }
 
-output "postgres_service" {
-  description = "PostgreSQL service name."
-  value       = kubernetes_service_v1.postgres.metadata[0].name
+output "grafana_url" {
+  description = "Grafana dashboard URL"
+  value       = "http://localhost:3003"
+}
+
+output "backend_container_id" {
+  description = "Docker container ID of the backend service"
+  value       = docker_container.backend.id
+}
+
+output "frontend_container_id" {
+  description = "Docker container ID of the frontend service"
+  value       = docker_container.frontend.id
+}
+
+output "network_id" {
+  description = "Docker network ID"
+  value       = docker_network.eldenring.id
 }

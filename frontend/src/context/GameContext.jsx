@@ -142,8 +142,14 @@ export function GameProvider({ children }) {
 
   const clearLevelUp = useCallback(() => dispatch({ type: 'CLEAR_LEVEL_UP' }), []);
 
+  const resetDay = useCallback(async () => {
+    await api.resetSession();
+    dispatch({ type: 'SET_SESSION', payload: null });
+    dispatch({ type: 'SET_TODOS',   payload: [] });
+  }, []);
+
   return (
-    <GameContext.Provider value={{ ...state, chooseBoss, addTodo, completeTodo, removeTodo, renameTodo, renameBoss, clearLevelUp }}>
+    <GameContext.Provider value={{ ...state, chooseBoss, addTodo, completeTodo, removeTodo, renameTodo, renameBoss, clearLevelUp, resetDay }}>
       {children}
     </GameContext.Provider>
   );

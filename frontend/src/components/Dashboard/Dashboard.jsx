@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { useGame } from '../../context/GameContext';
 import HPBar from '../HPBar/HPBar';
 import TodoList from '../TodoList/TodoList';
@@ -9,10 +10,23 @@ import Inventory from '../Inventory/Inventory';
 import './Dashboard.css';
 
 export default function Dashboard() {
-  const { session, inventory } = useGame();
-  const [imgError, setImgError]       = useState(false);
-  const [xpGained, setXpGained]       = useState(0);
+  const { session, inventory, resetDay } = useGame();
+  const navigate = useNavigate();
+  const [imgError, setImgError]           = useState(false);
+  const [xpGained, setXpGained]           = useState(0);
   const [showInventory, setShowInventory] = useState(false);
+  const [resetting, setResetting]         = useState(false);
+
+  const handleReset = async () => {
+    if (!window.confirm('Reset today\'s session and pick a new boss?')) return;
+    setResetting(true);
+    try {
+      await resetDay();
+      navigate('/select');
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -30,6 +44,14 @@ export default function Dashboard() {
       <nav className="dashboard__nav">
         <span className="dashboard__logo">RPG Todo List</span>
         <div className="dashboard__nav-right">
+          <button
+            className="dashboard__reset-btn"
+            onClick={handleReset}
+            disabled={resetting}
+            title="Restart Day (testing)"
+          >
+            ↺ Restart Day
+          </button>
           <button
             className="dashboard__inv-btn"
             onClick={() => setShowInventory(true)}

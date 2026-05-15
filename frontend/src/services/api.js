@@ -22,6 +22,7 @@ api.interceptors.request.use((config) => {
 // Daily
 export const getBosses       = ()        => api.get('/api/daily/bosses');
 export const getTodaySession = ()        => api.get('/api/daily/session');
+export const resetSession    = ()        => api.delete('/api/daily/session');
 export const selectBoss      = (boss_id) => api.post('/api/daily/select-boss', { boss_id });
 
 // Todos

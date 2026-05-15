@@ -1,143 +1,127 @@
 pipeline {
-    agent {
-        label 'wsl'
-    }
-
-    parameters {
-        string(name: 'DOCKERHUB_NAMESPACE', defaultValue: '', description: 'Docker Hub username or organization.')
-        booleanParam(name: 'PUSH_IMAGE', defaultValue: false, description: 'Build and push the frontend image.')
-    }
-
-    environment {
-        REGISTRY      = 'https://index.docker.io/v1/'
-        SCM_CRED      = 'thana-wsl'
-        IMAGE_NAME    = "${params.DOCKERHUB_NAMESPACE}/rpgtodolist-frontend"
-        IMAGE_TAG     = 'local'
-        REGISTRY_CRED = 'registry-credentials'
-    }
-
-    options {
-        timeout(time: 30, unit: 'MINUTES')
-        disableConcurrentBuilds()
-        skipDefaultCheckout(true)
-    }
-
-    stages {
-        stage('Checkout') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: SCM_CRED, usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
-                    sh '''
-                        cat > .git-askpass <<'EOF'
+  agent {
+    label 'wsl'
+  }
+  parameters {
+    string(name: 'DOCKERHUB_NAMESPACE', defaultValue: '', description: 'Docker Hub username or organization.')
+    booleanParam(name: 'PUSH_IMAGE', defaultValue: false, description: 'Build and push the frontend image.')
+  }
+  environment {
+    REGISTRY = 'https://index.docker.io/v1/'
+    SCM_CRED = 'thana-wsl'
+    IMAGE_NAME = "${params.DOCKERHUB_NAMESPACE}/rpgtodolist-frontend"
+    IMAGE_TAG = 'local'
+    REGISTRY_CRED = 'registry-credentials'
+  }
+  options {
+    timeout(time: 30, unit: 'MINUTES')
+    disableConcurrentBuilds()
+    skipDefaultCheckout(true)
+  }
+  stages {
+    stage('Checkout') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: SCM_CRED, usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
+          sh '''
+cat > .git-askpass <<'EOF'
 #!/bin/sh
 case "$1" in
-    *Username*) printf '%s' "$GIT_USERNAME" ;;
-    *Password*) printf '%s' "$GIT_PASSWORD" ;;
-    *) printf '%s' "$GIT_PASSWORD" ;;
+*Username*) printf '%s' "$GIT_USERNAME" ;;
+*Password*) printf '%s' "$GIT_PASSWORD" ;;
+*) printf '%s' "$GIT_PASSWORD" ;;
 esac
 EOF
-                        chmod 700 .git-askpass
-
-                        export GIT_ASKPASS="$PWD/.git-askpass"
-                        export GIT_TERMINAL_PROMPT=0
-
-                        if [ ! -d .git ]; then
-                            git init
-                        fi
-
-                        git remote remove origin 2>/dev/null || true
-                        git remote add origin https://github.com/ludwig-del/rpgtodolist.git
-                            git reset --hard HEAD 2>/dev/null || true
-                            # NTFS-backed workspaces can report transient unlink failures for prior node_modules content.
-                            git clean -fdx || true
-                        git fetch --prune origin +refs/heads/sun:refs/remotes/origin/sun
-                        git checkout -B sun refs/remotes/origin/sun
-                        git reset --hard refs/remotes/origin/sun
-                            git clean -fdx || true
-
-                        rm -f .git-askpass
-                    '''
-                }
-                script {
-                    env.IMAGE_TAG = "${env.BUILD_NUMBER}-${sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()}"
-                }
-            }
+chmod 700 .git-askpass
+export GIT_ASKPASS="$PWD/.git-askpass"
+export GIT_TERMINAL_PROMPT=0
+if [ ! -d .git ]; then
+  git init
+fi
+git remote remove origin 2>/dev/null || true
+git remote add origin https://github.com/ludwig-del/rpgtodolist.git
+git reset --hard HEAD 2>/dev/null || true
+# NTFS-backed workspaces can report transient unlink failures for prior node_modules content.
+git clean -fdx || true
+git fetch --prune origin +refs/heads/sun:refs/remotes/origin/sun
+git checkout -B sun refs/remotes/origin/sun
+git reset --hard refs/remotes/origin/sun
+git clean -fdx || true
+rm -f .git-askpass
+          '''
         }
-
-        stage('Validate Parameters') {
-            steps {
-                script {
-                    if (params.PUSH_IMAGE && !params.DOCKERHUB_NAMESPACE?.trim()) {
-                        error('DOCKERHUB_NAMESPACE is required when PUSH_IMAGE is enabled.')
-                    }
-                }
-            }
+        script {
+          env.IMAGE_TAG = "${env.BUILD_NUMBER}-${sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()}"
         }
-
-        stage('Test Frontend') {
-            steps {
-                sh '''
-                    docker run --rm \
-                        -v "$PWD:/workspace" \
-                        --mount type=volume,target=/workspace/frontend/node_modules \
-                        -w /workspace/frontend \
-                        -e CI=true \
-                            node:20-alpine sh -eu -c "npm install --legacy-peer-deps && npx react-scripts test --watchAll=false --ci --passWithNoTests"
-                '''
-            }
+      }
+    }
+    stage('Validate Parameters') {
+      steps {
+        script {
+          if (params.PUSH_IMAGE && !params.DOCKERHUB_NAMESPACE?.trim()) {
+            error('DOCKERHUB_NAMESPACE is required when PUSH_IMAGE is enabled.')
+          }
         }
-
-        stage('Build & Push Frontend Image') {
-            when {
-                expression { params.PUSH_IMAGE }
-            }
-            steps {
-                script {
-                    def workspaceDir = pwd().trim()
-                    def frontendImageRef = "${env.IMAGE_NAME}:${env.IMAGE_TAG}"
-                    def frontendContext = "${workspaceDir}/frontend"
-                    withCredentials([usernamePassword(credentialsId: REGISTRY_CRED, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-                        writeFile file: 'frontend_image.py', text: """import os
+      }
+    }
+    stage('Test Frontend') {
+      steps {
+        sh '''
+docker run --rm \
+  -v "$PWD:/workspace" \
+  --mount type=volume,target=/workspace/frontend/node_modules \
+  -w /workspace/frontend \
+  -e CI=true \
+  node:20-alpine sh -eu -c "npm install --legacy-peer-deps && npx react-scripts test --watchAll=false --ci --passWithNoTests"
+        '''
+      }
+    }
+    stage('Build & Push Frontend Image') {
+      when {
+        expression { params.PUSH_IMAGE }
+      }
+      steps {
+        script {
+          def workspaceDir = pwd().trim()
+          def frontendImageRef = "${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+          def frontendContext = "${workspaceDir}/frontend"
+          withCredentials([usernamePassword(credentialsId: REGISTRY_CRED, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+            writeFile file: 'frontend_image.py', text: """import os
 import subprocess
-
 frontend_image_ref = ${groovy.json.JsonOutput.toJson(frontendImageRef)}.strip()
 frontend_context = ${groovy.json.JsonOutput.toJson(frontendContext)}.strip()
 latest_image_ref = ${groovy.json.JsonOutput.toJson(env.IMAGE_NAME + ':latest')}.strip()
 registry = os.environ['REGISTRY'].strip()
 docker_username = os.environ['DOCKER_USERNAME']
 docker_password = os.environ['DOCKER_PASSWORD']
-
-
 subprocess.run([
-    'docker', 'run', '--rm',
-    '-v', '/var/run/docker.sock:/var/run/docker.sock',
-    '-v', f'{frontend_context}:/context',
-    '-w', '/context',
-    '-e', f'DOCKER_USERNAME={docker_username}',
-    '-e', f'DOCKER_PASSWORD={docker_password}',
-    '-e', f'REGISTRY={registry}',
-    '-e', f'IMAGE_REF={frontend_image_ref}',
-    '-e', f'LATEST_IMAGE_REF={latest_image_ref}',
-    'docker:27-cli',
-    'sh', '-eu', '-c',
-    'printf "%s" "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin "$REGISTRY"; '
-    'docker build -t "$IMAGE_REF" -f dockerfile .; '
-    'docker push "$IMAGE_REF"; '
-    'docker tag "$IMAGE_REF" "$LATEST_IMAGE_REF"; '
-    'docker push "$LATEST_IMAGE_REF"; '
-    'docker logout "$REGISTRY" || true',
-    'docker-build-wrapper'
+  'docker', 'run', '--rm',
+  '-v', '/var/run/docker.sock:/var/run/docker.sock',
+  '-v', f'{frontend_context}:/context',
+  '-w', '/context',
+  '-e', f'DOCKER_USERNAME={docker_username}',
+  '-e', f'DOCKER_PASSWORD={docker_password}',
+  '-e', f'REGISTRY={registry}',
+  '-e', f'IMAGE_REF={frontend_image_ref}',
+  '-e', f'LATEST_IMAGE_REF={latest_image_ref}',
+  'docker:27-cli',
+  'sh', '-eu', '-c',
+  'printf "%s" "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin "$REGISTRY"; '
+  'docker build -t "$IMAGE_REF" -f dockerfile .; '
+  'docker push "$IMAGE_REF"; '
+  'docker tag "$IMAGE_REF" "$LATEST_IMAGE_REF"; '
+  'docker push "$LATEST_IMAGE_REF"; '
+  'docker logout "$REGISTRY" || true',
 ], check=True)
-""".replace('\r', '')
-                        sh 'python3 frontend_image.py'
-                    }
-                }
-            }
+""".replace('\\r', '')
+            sh 'python3 frontend_image.py'
+          }
         }
+      }
     }
-
-    post {
-        always {
-            deleteDir()
-        }
+  }
+  post {
+    always {
+      deleteDir()
     }
+  }
 }

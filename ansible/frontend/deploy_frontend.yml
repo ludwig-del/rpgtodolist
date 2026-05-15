@@ -1,4 +1,3 @@
----
 - name: Deploy frontend image to Kubernetes
   hosts: deploy
   gather_facts: false

@@ -1,36 +1,54 @@
-variable "namespace" {
-  description = "Kubernetes namespace for the application."
+variable "docker_host" {
+  description = "Docker daemon socket (npipe on Windows, unix socket on Linux)"
+  type        = string
+  default     = "npipe:////./pipe/docker_engine"
+}
+
+variable "dockerhub_username" {
+  description = "Docker Hub username for pulling published images"
+  type        = string
+}
+
+variable "image_tag" {
+  description = "Image tag to deploy (e.g. build number from CI)"
+  type        = string
+  default     = "latest"
+}
+
+variable "project_root" {
+  description = "Absolute path to the project root on the host"
+  type        = string
+}
+
+variable "db_user" {
+  description = "PostgreSQL username"
   type        = string
   default     = "eldenring"
 }
 
-variable "kubeconfig_path" {
-  description = "Absolute path to the kubeconfig file used by the Kubernetes provider."
+variable "db_password" {
+  description = "PostgreSQL password"
   type        = string
-}
-
-variable "backend_image" {
-  description = "Backend container image to provision in Kubernetes."
-  type        = string
-  default     = "rpgtodolist-backend:latest"
-}
-
-variable "frontend_image" {
-  description = "Frontend container image to provision in Kubernetes."
-  type        = string
-  default     = "rpgtodolist-frontend:latest"
-}
-
-variable "postgres_password" {
-  description = "PostgreSQL password shared by the database secret and app DATABASE_URL."
-  type        = string
-  default     = "REPLACE_WITH_DB_PASSWORD"
   sensitive   = true
+  default     = "eldenring"
+}
+
+variable "db_name" {
+  description = "PostgreSQL database name"
+  type        = string
+  default     = "eldenring_todo"
 }
 
 variable "secret_key" {
-  description = "Flask SECRET_KEY stored in Kubernetes secret."
+  description = "Flask SECRET_KEY"
   type        = string
-  default     = "super-secret-prod-key-eldenring-2026"
   sensitive   = true
+  default     = "super-secret-dev-key-eldenring-2026"
+}
+
+variable "grafana_password" {
+  description = "Grafana admin password"
+  type        = string
+  sensitive   = true
+  default     = "admin"
 }

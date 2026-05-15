@@ -16,12 +16,25 @@ const cardVariants = {
 };
 
 export default function BossSelection() {
-  const { bosses, chooseBoss } = useGame();
+  const { bosses, chooseBoss, resetDay } = useGame();
   const navigate = useNavigate();
 
   const [selectedId, setSelectedId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState('');
+  const [resetting, setResetting]   = useState(false);
+
+  const handleReset = async () => {
+    if (!window.confirm('Reset today\'s session and pick a new boss?')) return;
+    setResetting(true);
+    try {
+      await resetDay();
+      setSelectedId(null);
+      setError('');
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const selectedBoss = bosses.find(b => b.id === selectedId);
 
@@ -45,6 +58,18 @@ export default function BossSelection() {
 
   return (
     <div className="boss-selection">
+      <nav className="boss-selection__nav">
+        <span className="boss-selection__logo">RPG Todo List</span>
+        <button
+          className="boss-selection__reset-btn"
+          onClick={handleReset}
+          disabled={resetting}
+          title="Restart Day"
+        >
+          ↺ Restart Day
+        </button>
+      </nav>
+
       <header className="boss-selection__header">
         <p className="boss-selection__eyebrow">Daily Quest</p>
         <h1 className="boss-selection__title">Choose Your Adversary</h1>
