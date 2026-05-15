@@ -77,7 +77,6 @@ EOF
             steps {
                 sh '''
                     docker run --rm \
-                        --user "$(id -u):$(id -g)" \
                         -v "$PWD:/workspace" \
                         --mount type=volume,target=/workspace/frontend/node_modules \
                         -w /workspace/frontend \
