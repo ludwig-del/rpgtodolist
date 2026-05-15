@@ -1,34 +1,29 @@
-output "app_url" {
-  description = "Frontend application URL"
-  value       = "http://localhost:3002"
+output "namespace" {
+  description = "Kubernetes namespace managed by Terraform"
+  value       = kubernetes_namespace_v1.app.metadata[0].name
 }
 
-output "api_url" {
-  description = "Backend API URL"
-  value       = "http://localhost:5000"
+output "backend_service_name" {
+  description = "Backend Kubernetes service name"
+  value       = kubernetes_service_v1.backend.metadata[0].name
 }
 
-output "prometheus_url" {
-  description = "Prometheus metrics UI"
-  value       = "http://localhost:9090"
+output "frontend_service_name" {
+  description = "Frontend Kubernetes service name"
+  value       = kubernetes_service_v1.frontend.metadata[0].name
 }
 
-output "grafana_url" {
-  description = "Grafana dashboard URL"
-  value       = "http://localhost:3003"
+output "postgres_service_name" {
+  description = "PostgreSQL headless service name"
+  value       = kubernetes_service_v1.postgres.metadata[0].name
 }
 
-output "backend_container_id" {
-  description = "Docker container ID of the backend service"
-  value       = docker_container.backend.id
+output "frontend_url" {
+  description = "Frontend NodePort URL"
+  value       = "http://localhost:${var.frontend_node_port}"
 }
 
-output "frontend_container_id" {
-  description = "Docker container ID of the frontend service"
-  value       = docker_container.frontend.id
-}
-
-output "network_id" {
-  description = "Docker network ID"
-  value       = docker_network.eldenring.id
+output "backend_metrics_url" {
+  description = "Backend metrics NodePort URL"
+  value       = "http://localhost:${var.backend_node_port}/metrics"
 }

@@ -9,7 +9,7 @@
 | Student ID | Name | Responsibility |
 |------------|------|----------------|
 | Fill in | Fill in | Git and App Development |
-| Fill in | Fill in | Jenkins and Docker |
+| B6618520 | นายธนภัทร เงินเส็ง | Jenkins and Docker |
 | Fill in | Fill in | Terraform and Ansible |
 | Fill in | Fill in | Kubernetes and Monitoring |
 
@@ -333,5 +333,5 @@ kubectl rollout status deployment/eldenring-frontend -n eldenring
 ## Submission Information
 
 - Course: ENG23 3074 — Serverless and Cloud Architectures
-- Instructor: Dr. Nuntawut Ko Kung (AFHEA)
+- Instructor: ดร.นันทวุฒิ คะอังกุ
 - Department: Computer Engineering
