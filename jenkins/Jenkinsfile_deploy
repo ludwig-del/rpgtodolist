@@ -122,7 +122,7 @@ EOF
                                 -w /workspace/frontend \
                                 -e CI=true \
                                 node:20-alpine sh -lc '
-                                    npm ci --legacy-peer-deps
+                                    npm install --legacy-peer-deps
                                     npx react-scripts test --watchAll=false --ci --passWithNoTests
                                 '
                         '''
