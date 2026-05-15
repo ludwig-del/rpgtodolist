@@ -7,6 +7,45 @@
   padding: 3rem 1.5rem 4rem;
 }
 
+.boss-selection__nav {
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2.5rem;
+}
+
+.boss-selection__logo {
+  font-family: var(--font-title);
+  font-size: 0.85rem;
+  letter-spacing: 0.3em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.boss-selection__reset-btn {
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  color: #7a3a2a;
+  border: 1px solid #4a2018;
+  padding: 0.35rem 0.7rem;
+  transition: color 0.2s, border-color 0.2s;
+  background: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.boss-selection__reset-btn:hover:not(:disabled) {
+  color: #e74c3c;
+  border-color: #c0392b;
+}
+
+.boss-selection__reset-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .boss-selection__header {
   text-align: center;
   margin-bottom: 2.5rem;

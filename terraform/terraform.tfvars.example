@@ -1,0 +1,11 @@
+# Copy this file to terraform.tfvars and fill in your values
+# terraform.tfvars is git-ignored to protect secrets
+
+dockerhub_username = "YOUR_DOCKERHUB_USERNAME"
+image_tag          = "latest"
+project_root       = "C:/Users/Asus/Documents/CPEss6/Serverless/Eldenring Project"
+
+# Secrets (override defaults for production)
+db_password      = "eldenring"
+secret_key       = "super-secret-dev-key-eldenring-2026"
+grafana_password = "admin"

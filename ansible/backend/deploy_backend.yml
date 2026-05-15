@@ -1,0 +1,72 @@
+- name: Deploy backend image to Kubernetes
+  hosts: deploy
+  gather_facts: false
+  vars:
+    kube_namespace: "eldenring"
+    deployment_name: "eldenring-backend"
+    container_name: "backend"
+    init_container_name: "run-migrations"
+  tasks:
+    - name: Ensure postgres is ready before backend rollout
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - rollout
+          - status
+          - statefulset/postgres
+          - -n
+          - "{{ kube_namespace }}"
+          - --timeout=180s
+
+    - name: Ensure backend deployment exists
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - get
+          - deployment
+          - "{{ deployment_name }}"
+          - -n
+          - "{{ kube_namespace }}"
+
+    - name: Update backend deployment image
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - patch
+          - "deployment/{{ deployment_name }}"
+          - -n
+          - "{{ kube_namespace }}"
+          - --type=strategic
+          - -p
+          - |
+            {
+              "spec": {
+                "template": {
+                  "spec": {
+                    "containers": [
+                      {
+                        "name": "{{ container_name }}",
+                        "image": "{{ backend_image }}"
+                      }
+                    ],
+                    "initContainers": [
+                      {
+                        "name": "{{ init_container_name }}",
+                        "image": "{{ backend_image }}"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+
+    - name: Wait for backend rollout
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - rollout
+          - status
+          - "deployment/{{ deployment_name }}"
+          - -n
+          - "{{ kube_namespace }}"
+          - --timeout=120s

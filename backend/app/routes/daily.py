@@ -37,6 +37,21 @@ def get_today_session():
     return jsonify({"session": session.to_dict() if session else None}), 200
 
 
+@daily_bp.route("/session", methods=["DELETE"])
+def reset_today_session():
+    user = _get_or_create_user()
+    if not user:
+        return jsonify({"error": "X-Device-ID header required"}), 400
+    session = DailySession.query.filter_by(
+        user_id=user.id, session_date=date.today()
+    ).first()
+    if not session:
+        return jsonify({"error": "No session today"}), 404
+    db.session.delete(session)
+    db.session.commit()
+    return jsonify({"message": "Session reset"}), 200
+
+
 @daily_bp.route("/select-boss", methods=["POST"])
 def select_boss():
     user = _get_or_create_user()

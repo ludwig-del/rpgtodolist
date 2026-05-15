@@ -1,0 +1,262 @@
+pipeline {
+    agent {
+        label 'wsl'
+    }
+
+    parameters {
+        string(name: 'DOCKERHUB_NAMESPACE', defaultValue: '', description: 'Optional Docker Hub username or organization. Leave blank to deploy local images on Docker Desktop Kubernetes.')
+        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Image tag to deploy for both services.')
+        string(name: 'K8S_NAMESPACE', defaultValue: 'eldenring', description: 'Kubernetes namespace for the application deployment.')
+    }
+
+    environment {
+        SCM_CRED = 'thana-wsl'
+        KUBECONFIG_CRED = 'kubeconfig-prod'
+        TF_IN_AUTOMATION = 'true'
+    }
+
+    options {
+        timeout(time: 20, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        skipDefaultCheckout(true)
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                sh '''
+                    if [ -d terraform/.terraform ]; then
+                      chmod -R u+w terraform/.terraform || true
+                      rm -rf terraform/.terraform || true
+                    fi
+
+                                        rm -rf terraform/.terraform-run terraform/.terraform.d .kubeconfig || true
+                '''
+                                withCredentials([usernamePassword(credentialsId: SCM_CRED, usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
+                                        sh '''
+                                                cat > .git-askpass <<'EOF'
+#!/bin/sh
+case "$1" in
+    *Username*) printf '%s' "$GIT_USERNAME" ;;
+    *Password*) printf '%s' "$GIT_PASSWORD" ;;
+    *) printf '%s' "$GIT_PASSWORD" ;;
+esac
+EOF
+                                                chmod 700 .git-askpass
+
+                                                export GIT_ASKPASS="$PWD/.git-askpass"
+                                                export GIT_TERMINAL_PROMPT=0
+
+                                                if [ ! -d .git ]; then
+                                                    git init
+                                                fi
+
+                                                git remote remove origin 2>/dev/null || true
+                                                git remote add origin https://github.com/ludwig-del/rpgtodolist.git
+                                                git reset --hard HEAD 2>/dev/null || true
+                                                # NTFS-backed workspaces can report transient unlink failures for prior node_modules content.
+                                                git clean -fdx || true
+                                                git fetch --prune origin +refs/heads/sun:refs/remotes/origin/sun
+                                                git checkout -B sun refs/remotes/origin/sun
+                                                git reset --hard refs/remotes/origin/sun
+                                                git clean -fdx || true
+
+                                                rm -f .git-askpass
+                                        '''
+                                }
+            }
+        }
+
+        stage('Validate Parameters') {
+            steps {
+                script {
+                    def namespace = params.DOCKERHUB_NAMESPACE?.trim()
+
+                    if (namespace) {
+                        env.DOCKERHUB_NAMESPACE_RESOLVED = namespace
+                        env.PUSH_TO_REGISTRY = 'true'
+                        env.BACKEND_IMAGE = "${namespace}/rpgtodolist-backend:${params.IMAGE_TAG}"
+                        env.FRONTEND_IMAGE = "${namespace}/rpgtodolist-frontend:${params.IMAGE_TAG}"
+                        echo "Using Docker Hub namespace: ${namespace}"
+                    } else {
+                        env.DOCKERHUB_NAMESPACE_RESOLVED = ''
+                        env.PUSH_TO_REGISTRY = 'false'
+                        env.BACKEND_IMAGE = "rpgtodolist-backend:${params.IMAGE_TAG}"
+                        env.FRONTEND_IMAGE = "rpgtodolist-frontend:${params.IMAGE_TAG}"
+                        echo 'Using local Kubernetes images from the Docker Desktop image cache.'
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
+                    script {
+                        writeFile file: 'terraform_init.py', text: '''import os
+import shutil
+import subprocess
+
+workspace = os.getcwd().strip()
+terraform_dir = os.path.join(workspace, 'terraform')
+if not os.path.isfile(os.path.join(terraform_dir, 'main.tf')):
+    raise SystemExit('No terraform/main.tf found in this repository.')
+
+for path in [
+    os.path.join(terraform_dir, '.terraform'),
+    os.path.join(terraform_dir, '.terraform-run'),
+    os.path.join(terraform_dir, '.terraform.d'),
+    os.path.join(workspace, '.kubeconfig'),
+]:
+    shutil.rmtree(path, ignore_errors=True) if os.path.isdir(path) else (os.remove(path) if os.path.exists(path) else None)
+
+os.makedirs(os.path.join(terraform_dir, '.terraform.d', 'plugin-cache'), exist_ok=True)
+os.makedirs(os.path.join(terraform_dir, '.terraform-run'), exist_ok=True)
+shutil.copyfile(os.environ['KUBECONFIG'].strip(), os.path.join(workspace, '.kubeconfig'))
+
+subprocess.run([
+    'docker', 'run', '--rm',
+    '--user', f"{os.getuid()}:{os.getgid()}",
+    '--entrypoint', '/bin/sh',
+    '-v', f'{workspace}:/workspace',
+    '-w', '/workspace/terraform',
+    '-e', f"TF_IN_AUTOMATION={os.environ['TF_IN_AUTOMATION']}",
+    '-e', 'TF_PLUGIN_CACHE_DIR=/workspace/terraform/.terraform.d/plugin-cache',
+    '-e', 'TF_DATA_DIR=/workspace/terraform/.terraform-run',
+    '-e', f"TF_VAR_namespace={os.environ['K8S_NAMESPACE']}",
+    '-e', 'TF_VAR_kubeconfig_path=/workspace/.kubeconfig',
+    '-e', f"TF_VAR_backend_image={os.environ['BACKEND_IMAGE']}",
+    '-e', f"TF_VAR_frontend_image={os.environ['FRONTEND_IMAGE']}",
+    'hashicorp/terraform:1.9.8',
+    '-eu', '-c', 'terraform init', 'terraform-init-wrapper'
+], check=True)
+'''.replace('\r', '')
+                        sh 'python3 terraform_init.py'
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
+                    script {
+                        writeFile file: 'terraform_apply.py', text: '''import os
+import shutil
+import subprocess
+
+workspace = os.getcwd().strip()
+terraform_dir = os.path.join(workspace, 'terraform')
+kubeconfig_src = os.environ['KUBECONFIG'].strip()
+kubeconfig_dst = os.path.join(workspace, '.kubeconfig')
+shutil.copyfile(kubeconfig_src, kubeconfig_dst)
+
+namespace = os.environ['K8S_NAMESPACE']
+
+def read_secret(key: str, default: str) -> str:
+    try:
+        completed = subprocess.run([
+            'kubectl', 'get', 'secret', 'eldenring-secrets',
+            '-n', namespace,
+            '-o', f'jsonpath={{.data.{key}}}'
+        ], check=True, capture_output=True, text=True)
+        value = completed.stdout.strip()
+        if not value:
+            return default
+        decoded = subprocess.run(['base64', '-d'], input=value, check=True, capture_output=True, text=True)
+        return decoded.stdout.strip() or default
+    except Exception:
+        return default
+
+postgres_password = read_secret('POSTGRES_PASSWORD', 'REPLACE_WITH_DB_PASSWORD')
+secret_key = read_secret('SECRET_KEY', 'super-secret-prod-key-eldenring-2026')
+
+terraform_script = '\\n'.join([
+    'terraform import -input=false kubernetes_namespace_v1.app "$TF_VAR_namespace" || true',
+    'terraform import -input=false kubernetes_config_map_v1.app "$TF_VAR_namespace/eldenring-config" || true',
+    'terraform import -input=false kubernetes_secret_v1.app "$TF_VAR_namespace/eldenring-secrets" || true',
+    'terraform import -input=false kubernetes_service_v1.postgres "$TF_VAR_namespace/postgres-svc" || true',
+    'terraform import -input=false kubernetes_stateful_set_v1.postgres "$TF_VAR_namespace/postgres" || true',
+    'terraform import -input=false kubernetes_deployment_v1.backend "$TF_VAR_namespace/eldenring-backend" || true',
+    'terraform import -input=false kubernetes_service_v1.backend "$TF_VAR_namespace/eldenring-backend-svc" || true',
+    'terraform import -input=false kubernetes_deployment_v1.frontend "$TF_VAR_namespace/eldenring-frontend" || true',
+    'terraform import -input=false kubernetes_service_v1.frontend "$TF_VAR_namespace/eldenring-frontend-svc" || true',
+    'terraform apply -auto-approve',
+])
+
+subprocess.run([
+    'docker', 'run', '--rm',
+    '--user', f"{os.getuid()}:{os.getgid()}",
+    '--entrypoint', '/bin/sh',
+    '-v', f'{workspace}:/workspace',
+    '-w', '/workspace/terraform',
+    '-e', f"TF_IN_AUTOMATION={os.environ['TF_IN_AUTOMATION']}",
+    '-e', 'TF_PLUGIN_CACHE_DIR=/workspace/terraform/.terraform.d/plugin-cache',
+    '-e', 'TF_DATA_DIR=/workspace/terraform/.terraform-run',
+    '-e', f"TF_VAR_namespace={namespace}",
+    '-e', 'TF_VAR_kubeconfig_path=/workspace/.kubeconfig',
+    '-e', f"TF_VAR_backend_image={os.environ['BACKEND_IMAGE']}",
+    '-e', f"TF_VAR_frontend_image={os.environ['FRONTEND_IMAGE']}",
+    '-e', f'TF_VAR_postgres_password={postgres_password}',
+    '-e', f'TF_VAR_secret_key={secret_key}',
+    'hashicorp/terraform:1.9.8',
+    '-eu', '-c', terraform_script, 'terraform-apply-wrapper'
+], check=True)
+'''.replace('\r', '')
+                        sh 'python3 terraform_apply.py'
+                    }
+                }
+            }
+        }
+
+        stage('Deploy Backend') {
+            steps {
+                withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
+                    sh '''
+                        echo "Deploy Backend to Kubernetes Cluster..."
+                        python3 -m venv /tmp/ansible-venv
+                        . /tmp/ansible-venv/bin/activate
+                        pip install -q ansible
+                        ansible-playbook \
+                          -i ansible/backend/hosts.ini \
+                          ansible/backend/deploy_backend.yml \
+                          --extra-vars "backend_image=${BACKEND_IMAGE} kube_namespace=${K8S_NAMESPACE} version=${IMAGE_TAG}"
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy Frontend') {
+            steps {
+                withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
+                    sh '''
+                        echo "Deploy Frontend to Kubernetes Cluster..."
+                        python3 -m venv /tmp/ansible-venv
+                        . /tmp/ansible-venv/bin/activate
+                        pip install -q ansible
+                        ansible-playbook \
+                          -i ansible/frontend/hosts.ini \
+                          ansible/frontend/deploy_frontend.yml \
+                          --extra-vars "frontend_image=${FRONTEND_IMAGE} kube_namespace=${K8S_NAMESPACE} version=${IMAGE_TAG}"
+                    '''
+                }
+            }
+        }
+
+    }
+
+    post {
+        always {
+            sh '''
+                if [ -d terraform/.terraform ]; then
+                    chmod -R u+w terraform/.terraform || true
+                    rm -rf terraform/.terraform || true
+                fi
+
+                rm -rf terraform/.terraform-run terraform/.terraform.d .kubeconfig /tmp/ansible-venv || true
+            '''
+            deleteDir()
+        }
+    }
+
+}
