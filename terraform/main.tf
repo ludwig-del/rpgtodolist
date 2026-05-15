@@ -52,7 +52,7 @@ resource "kubernetes_secret_v1" "app" {
 
   type = "Opaque"
 
-  string_data = {
+  data = {
     SECRET_KEY        = var.secret_key
     POSTGRES_PASSWORD = var.postgres_password
   }
