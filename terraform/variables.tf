@@ -1,54 +1,64 @@
-variable "docker_host" {
-  description = "Docker daemon socket (npipe on Windows, unix socket on Linux)"
+variable "namespace" {
+  description = "Kubernetes namespace for the application"
   type        = string
-  default     = "npipe:////./pipe/docker_engine"
+  default     = "eldenring"
 }
 
-variable "dockerhub_username" {
-  description = "Docker Hub username for pulling published images"
-  type        = string
-}
-
-variable "image_tag" {
-  description = "Image tag to deploy (e.g. build number from CI)"
-  type        = string
-  default     = "latest"
-}
-
-variable "project_root" {
-  description = "Absolute path to the project root on the host"
+variable "kubeconfig_path" {
+  description = "Absolute path to the kubeconfig file used by Terraform"
   type        = string
 }
 
-variable "db_user" {
+variable "backend_image" {
+  description = "Backend container image"
+  type        = string
+  default     = "rpgtodolist-backend:latest"
+}
+
+variable "frontend_image" {
+  description = "Frontend container image"
+  type        = string
+  default     = "rpgtodolist-frontend:latest"
+}
+
+variable "postgres_user" {
   description = "PostgreSQL username"
   type        = string
   default     = "eldenring"
 }
 
-variable "db_password" {
-  description = "PostgreSQL password"
-  type        = string
-  sensitive   = true
-  default     = "eldenring"
-}
-
-variable "db_name" {
+variable "postgres_db" {
   description = "PostgreSQL database name"
   type        = string
   default     = "eldenring_todo"
 }
 
-variable "secret_key" {
-  description = "Flask SECRET_KEY"
+variable "postgres_password" {
+  description = "PostgreSQL password used by both the secret and backend DATABASE_URL"
   type        = string
   sensitive   = true
-  default     = "super-secret-dev-key-eldenring-2026"
 }
 
-variable "grafana_password" {
-  description = "Grafana admin password"
+variable "secret_key" {
+  description = "Flask secret key"
   type        = string
   sensitive   = true
-  default     = "admin"
+}
+
+variable "backend_node_port" {
+  description = "NodePort exposed by the backend service"
+  type        = number
+  default     = 30500
+}
+
+variable "frontend_node_port" {
+  description = "NodePort exposed by the frontend service"
+  type        = number
+  default     = 30080
+}
+
+variable "postgres_storage" {
+  description = "Requested persistent storage for PostgreSQL"
+  type        = string
+  default     = "5Gi"
 }
