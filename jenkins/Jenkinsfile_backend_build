@@ -92,13 +92,7 @@ EOF
             post {
                 always {
                     junit allowEmptyResults: true, testResults: 'backend/test-results.xml'
-                    archiveArtifacts artifacts: 'backend/coverage.xml', fingerprint: true, onlyIfSuccessful: false
-                }
-            }
-        }
-
-        stage('Build & Push Backend Image') {
-            when {
+                                    python:3.12-slim sh -eu -c ". /etc/os-release >/dev/null 2>&1 || true; python -m venv /tmp/venv && . /tmp/venv/bin/activate && pip install -q -r requirements.txt pytest pytest-cov && pytest tests/ -v --tb=short --junitxml=test-results.xml --cov=app --cov-report=xml:coverage.xml"
                 expression { params.PUSH_IMAGE }
             }
             steps {
