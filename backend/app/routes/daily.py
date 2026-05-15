@@ -74,6 +74,25 @@ def select_boss():
     return jsonify({"session": session.to_dict()}), 201
 
 
+@daily_bp.route("/bosses/<int:boss_id>", methods=["PATCH"])
+def rename_boss(boss_id: int):
+    data = request.get_json() or {}
+    new_name = data.get("name", "").strip()
+    if not new_name:
+        return jsonify({"error": "name is required"}), 400
+
+    boss = Boss.query.get(boss_id)
+    if not boss:
+        return jsonify({"error": "Boss not found"}), 404
+
+    if Boss.query.filter(Boss.name == new_name, Boss.id != boss_id).first():
+        return jsonify({"error": "A boss with that name already exists"}), 409
+
+    boss.name = new_name
+    db.session.commit()
+    return jsonify({"boss": boss.to_dict()}), 200
+
+
 @daily_bp.route("/history", methods=["GET"])
 def get_history():
     user = _get_or_create_user()

@@ -12,7 +12,7 @@ class DevelopmentConfig(Config):
     DEBUG = True
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "DATABASE_URL",
-        "postgresql://eldenring:eldenring@db:5432/eldenring_todo",
+        "postgresql://rpgtodolist:rpgtodolist@db:5432/rpgtodolist",
     )
 
 

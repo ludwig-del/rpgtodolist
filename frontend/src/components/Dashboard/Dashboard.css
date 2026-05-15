@@ -24,6 +24,42 @@
   text-transform: uppercase;
 }
 
+.dashboard__nav-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.dashboard__inv-btn {
+  position: relative;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.75rem;
+  transition: color 0.2s, border-color 0.2s;
+  background: none;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.dashboard__inv-btn:hover {
+  color: var(--gold);
+  border-color: var(--gold-dark);
+}
+
+.dashboard__inv-badge {
+  background: var(--gold-dark);
+  color: var(--bg-deep);
+  font-size: 0.6rem;
+  font-family: var(--font-title);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+  line-height: 1.4;
+}
+
 .dashboard__logout-btn {
   font-size: 0.7rem;
   letter-spacing: 0.12em;
@@ -120,6 +156,15 @@
 @keyframes victoryPulse {
   0%, 100% { text-shadow: 0 0 20px rgba(201, 168, 76, 0.4); }
   50%       { text-shadow: 0 0 40px rgba(201, 168, 76, 0.9); }
+}
+
+.dashboard__victory-xp {
+  font-family: var(--font-title);
+  font-size: 0.9rem;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
 }
 
 .dashboard__victory-sub {

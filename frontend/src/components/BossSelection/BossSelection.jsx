@@ -49,9 +49,9 @@ export default function BossSelection() {
         <p className="boss-selection__eyebrow">Daily Quest</p>
         <h1 className="boss-selection__title">Choose Your Adversary</h1>
         <p className="boss-selection__subtitle">
-          The number of tasks required increases with each boss.
+          The number of tasks required increases with each stage.
           <br />
-          Choose wisely, Tarnished.
+          Defeat harder bosses to earn more XP.
         </p>
       </header>
 

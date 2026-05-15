@@ -1,0 +1,130 @@
+.levelup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.levelup-modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  padding: 2.5rem 2rem 2rem;
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+}
+
+.levelup__eyebrow {
+  font-family: var(--font-title);
+  font-size: 0.62rem;
+  letter-spacing: 0.35em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.levelup__level-title {
+  font-size: 2.4rem;
+  color: var(--gold);
+  letter-spacing: 0.1em;
+  animation: levelPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes levelPulse {
+  0%, 100% { text-shadow: 0 0 20px rgba(201, 168, 76, 0.4); }
+  50%       { text-shadow: 0 0 55px rgba(201, 168, 76, 1); }
+}
+
+.levelup__item-label {
+  font-family: var(--font-title);
+  font-size: 0.65rem;
+  letter-spacing: 0.25em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin: 1.3rem 0 0.8rem;
+}
+
+/* Item card */
+.levelup__item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  text-align: left;
+  margin-bottom: 1.6rem;
+}
+
+.levelup__item-icon {
+  font-size: 2.4rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.levelup__item-details {
+  min-width: 0;
+}
+
+.levelup__item-name {
+  font-family: var(--font-title);
+  font-size: 1rem;
+  color: var(--gold-light);
+  margin-bottom: 0.15rem;
+}
+
+.levelup__item-rarity {
+  font-family: var(--font-title);
+  font-size: 0.58rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+}
+
+.levelup__item-desc {
+  font-size: 0.83rem;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* Rarity border + glow */
+.levelup__item--common    { border-color: #555; }
+.levelup__item--uncommon  { border-color: #22aa44; box-shadow: 0 0 10px rgba(34,170,68,0.2); }
+.levelup__item--rare      { border-color: #3399ff; box-shadow: 0 0 12px rgba(51,153,255,0.25); }
+.levelup__item--epic      { border-color: #aa44ff; box-shadow: 0 0 14px rgba(170,68,255,0.3); }
+.levelup__item--legendary { border-color: var(--gold); box-shadow: 0 0 22px rgba(201,168,76,0.45); animation: legendaryShimmer 2s ease-in-out infinite; }
+
+@keyframes legendaryShimmer {
+  0%, 100% { box-shadow: 0 0 18px rgba(201,168,76,0.35); }
+  50%       { box-shadow: 0 0 35px rgba(201,168,76,0.7); }
+}
+
+/* Rarity text colours */
+.levelup__rarity--common    { color: #888; }
+.levelup__rarity--uncommon  { color: #33dd66; }
+.levelup__rarity--rare      { color: #55aaff; }
+.levelup__rarity--epic      { color: #cc66ff; }
+.levelup__rarity--legendary { color: var(--gold); }
+
+/* Close button */
+.levelup__close-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background: linear-gradient(135deg, #1e1608, #2e2210);
+  border: 1px solid var(--gold-dark);
+  color: var(--gold);
+  font-size: 0.82rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.levelup__close-btn:hover {
+  background: linear-gradient(135deg, #2e2210, #4a3618);
+  box-shadow: 0 0 14px rgba(201, 168, 76, 0.3);
+}

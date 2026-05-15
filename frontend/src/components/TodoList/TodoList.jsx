@@ -3,8 +3,27 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGame } from '../../context/GameContext';
 import './TodoList.css';
 
-function TodoItem({ todo, onTick, onDelete, disabled }) {
+function TodoItem({ todo, onTick, onDelete, onRename, disabled }) {
   const isDone = todo.status === 'done';
+  const [editing, setEditing]   = useState(false);
+  const [editVal, setEditVal]   = useState(todo.task_name);
+  const [saving, setSaving]     = useState(false);
+
+  const handleRenameSubmit = async (e) => {
+    e.preventDefault();
+    const trimmed = editVal.trim();
+    if (!trimmed || trimmed === todo.task_name) { setEditing(false); return; }
+    setSaving(true);
+    try {
+      await onRename(todo.id, trimmed);
+      setEditing(false);
+    } catch {
+      setEditVal(todo.task_name);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <motion.li
@@ -25,24 +44,54 @@ function TodoItem({ todo, onTick, onDelete, disabled }) {
         {isDone && <span className="todo-item__check-icon">✓</span>}
       </button>
 
-      <span className="todo-item__text">{todo.task_name}</span>
-
-      {!isDone && (
-        <button
-          className="todo-item__delete-btn"
-          onClick={() => onDelete(todo.id)}
-          aria-label={`Delete: ${todo.task_name}`}
-          title="Remove task"
+      {editing ? (
+        <form className="todo-item__rename-form" onSubmit={handleRenameSubmit}>
+          <input
+            className="todo-item__rename-input"
+            value={editVal}
+            onChange={(e) => setEditVal(e.target.value)}
+            onBlur={handleRenameSubmit}
+            autoFocus
+            maxLength={255}
+            disabled={saving}
+          />
+        </form>
+      ) : (
+        <span
+          className="todo-item__text"
+          title={isDone ? undefined : 'Double-click to rename'}
+          onDoubleClick={() => { if (!isDone) { setEditVal(todo.task_name); setEditing(true); } }}
         >
-          ✕
-        </button>
+          {todo.task_name}
+        </span>
+      )}
+
+      {!isDone && !editing && (
+        <div className="todo-item__actions">
+          <button
+            className="todo-item__edit-btn"
+            onClick={() => { setEditVal(todo.task_name); setEditing(true); }}
+            aria-label={`Rename: ${todo.task_name}`}
+            title="Rename task"
+          >
+            ✎
+          </button>
+          <button
+            className="todo-item__delete-btn"
+            onClick={() => onDelete(todo.id)}
+            aria-label={`Delete: ${todo.task_name}`}
+            title="Remove task"
+          >
+            ✕
+          </button>
+        </div>
       )}
     </motion.li>
   );
 }
 
-export default function TodoList({ sessionCleared }) {
-  const { todos, addTodo, completeTodo, removeTodo } = useGame();
+export default function TodoList({ sessionCleared, onXpGained }) {
+  const { todos, addTodo, completeTodo, removeTodo, renameTodo } = useGame();
   const [taskName, setTaskName] = useState('');
   const [adding, setAdding]     = useState(false);
   const [ticking, setTicking]   = useState(null);
@@ -62,7 +111,12 @@ export default function TodoList({ sessionCleared }) {
   const handleTick = async (id) => {
     setTicking(id);
     try {
-      await completeTodo(id);
+      const data = await completeTodo(id);
+      if (data.boss_defeated && onXpGained) {
+        const earned = data.session.boss?.difficulty_order || 1;
+        onXpGained(earned);
+        setTimeout(() => onXpGained(0), 3000);
+      }
     } finally {
       setTicking(null);
     }
@@ -70,6 +124,10 @@ export default function TodoList({ sessionCleared }) {
 
   const handleDelete = async (id) => {
     await removeTodo(id);
+  };
+
+  const handleRename = async (id, name) => {
+    await renameTodo(id, name);
   };
 
   return (
@@ -110,6 +168,7 @@ export default function TodoList({ sessionCleared }) {
                 todo={todo}
                 onTick={handleTick}
                 onDelete={handleDelete}
+                onRename={handleRename}
                 disabled={ticking === todo.id}
               />
             ))}

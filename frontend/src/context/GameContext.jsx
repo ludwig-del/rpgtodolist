@@ -1,11 +1,39 @@
 import React, { createContext, useCallback, useContext, useEffect, useReducer } from 'react';
 import * as api from '../services/api';
+import { rollItem } from '../data/items';
+
+const XP_PER_LEVEL    = 5;
+const XP_KEY          = 'rpg_xp';
+const INVENTORY_KEY   = 'rpg_inventory';
+
+function loadXp() {
+  return parseInt(localStorage.getItem(XP_KEY) || '0', 10);
+}
+
+function loadInventory() {
+  try { return JSON.parse(localStorage.getItem(INVENTORY_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function xpToStats(xp) {
+  return {
+    xp,
+    level:      Math.floor(xp / XP_PER_LEVEL) + 1,
+    xpInLevel:  xp % XP_PER_LEVEL,
+    xpPerLevel: XP_PER_LEVEL,
+  };
+}
+
+const stored = loadXp();
 
 const initialState = {
-  session: null,
-  todos:   [],
-  bosses:  [],
-  loading: true,
+  session:     null,
+  todos:       [],
+  bosses:      [],
+  loading:     true,
+  levelUpItem: null,
+  inventory:   loadInventory(),
+  ...xpToStats(stored),
 };
 
 function reducer(state, action) {
@@ -22,7 +50,27 @@ function reducer(state, action) {
         session: action.payload.session,
       };
     case 'DELETE_TODO':  return { ...state, todos: state.todos.filter(t => t.id !== action.payload) };
-    default:             return state;
+    case 'RENAME_TODO':  return { ...state, todos: state.todos.map(t => t.id === action.payload.id ? action.payload : t) };
+    case 'RENAME_BOSS':  return {
+      ...state,
+      bosses: state.bosses.map(b => b.id === action.payload.id ? action.payload : b),
+      session: state.session?.boss?.id === action.payload.id
+        ? { ...state.session, boss: action.payload }
+        : state.session,
+    };
+    case 'ADD_XP': {
+      const newXp = state.xp + action.payload;
+      localStorage.setItem(XP_KEY, String(newXp));
+      const newStats  = xpToStats(newXp);
+      const leveledUp = newStats.level > state.level;
+      if (!leveledUp) return { ...state, ...newStats };
+      const item      = rollItem();
+      const inventory = [...state.inventory, { ...item, obtainedAt: Date.now(), atLevel: newStats.level }];
+      localStorage.setItem(INVENTORY_KEY, JSON.stringify(inventory));
+      return { ...state, ...newStats, inventory, levelUpItem: item };
+    }
+    case 'CLEAR_LEVEL_UP': return { ...state, levelUpItem: null };
+    default:               return state;
   }
 }
 
@@ -31,7 +79,6 @@ const GameContext = createContext(null);
 export function GameProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  // On mount: load today's session and boss list
   useEffect(() => {
     (async () => {
       try {
@@ -69,6 +116,10 @@ export function GameProvider({ children }) {
   const completeTodo = useCallback(async (todoId) => {
     const { data } = await api.tickTodo(todoId);
     dispatch({ type: 'TICK_TODO', payload: { todo: data.todo, session: data.session } });
+    if (data.boss_defeated) {
+      const xpEarned = data.session.boss?.difficulty_order || 1;
+      dispatch({ type: 'ADD_XP', payload: xpEarned });
+    }
     return data;
   }, []);
 
@@ -77,8 +128,22 @@ export function GameProvider({ children }) {
     dispatch({ type: 'DELETE_TODO', payload: todoId });
   }, []);
 
+  const renameTodo = useCallback(async (todoId, taskName) => {
+    const { data } = await api.renameTodo(todoId, taskName);
+    dispatch({ type: 'RENAME_TODO', payload: data.todo });
+    return data.todo;
+  }, []);
+
+  const renameBoss = useCallback(async (bossId, name) => {
+    const { data } = await api.renameBoss(bossId, name);
+    dispatch({ type: 'RENAME_BOSS', payload: data.boss });
+    return data.boss;
+  }, []);
+
+  const clearLevelUp = useCallback(() => dispatch({ type: 'CLEAR_LEVEL_UP' }), []);
+
   return (
-    <GameContext.Provider value={{ ...state, chooseBoss, addTodo, completeTodo, removeTodo }}>
+    <GameContext.Provider value={{ ...state, chooseBoss, addTodo, completeTodo, removeTodo, renameTodo, renameBoss, clearLevelUp }}>
       {children}
     </GameContext.Provider>
   );
