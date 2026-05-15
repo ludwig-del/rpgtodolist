@@ -16,6 +16,10 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/tfplan
 infrastructure/terraform/terraform.tfvars
 infrastructure/terraform/.terraform/
 infrastructure/terraform/tfplan
