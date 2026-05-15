@@ -10,11 +10,8 @@ pipeline {
     }
 
     environment {
-        REGISTRY = 'https://index.docker.io/v1/'
-        REGISTRY_CRED = 'registry-credentials'
         SCM_CRED = 'thana-wsl'
         KUBECONFIG_CRED = 'kubeconfig-prod'
-        TF_IN_AUTOMATION = 'true'
     }
 
     options {
@@ -66,7 +63,6 @@ EOF
                                                 rm -f .git-askpass
                                         '''
                                 }
-                                stash name: 'workspace-source', includes: '**/*', excludes: '.git/**'
             }
         }
 
@@ -92,204 +88,60 @@ EOF
             }
         }
 
-        stage('Build + Test') {
-            parallel {
-                stage('Test Backend') {
-                    steps {
-                        unstash 'workspace-source'
-                        sh '''
-                            docker run --rm \
-                                --user "$(id -u):$(id -g)" \
-                                -e HOME=/tmp \
-                                -v "$PWD:/workspace" \
-                                -w /workspace/backend \
-                                    python:3.12-slim sh -eu -c "python -m venv /tmp/venv && . /tmp/venv/bin/activate && pip install -q -r requirements.txt pytest pytest-cov && pytest tests/ -v --tb=short --junitxml=test-results.xml --cov=app --cov-report=xml:coverage.xml"
-                        '''
-                    }
-                    post {
-                        always {
-                            junit allowEmptyResults: true, testResults: 'backend/test-results.xml'
-                            archiveArtifacts artifacts: 'backend/coverage.xml', fingerprint: true, onlyIfSuccessful: false
-                        }
-                    }
-                }
-
-                stage('Test Frontend') {
-                    steps {
-                        unstash 'workspace-source'
-                        sh '''
-                            docker run --rm \
-                                -v "$PWD:/workspace" \
-                                --mount type=volume,target=/workspace/frontend/node_modules \
-                                -w /workspace/frontend \
-                                -e CI=true \
-                                    node:20-alpine sh -eu -c "npm install --legacy-peer-deps && npx react-scripts test --watchAll=false --ci --passWithNoTests"
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('Docker Build + Push Image') {
-            steps {
-                script {
-                    def backendImg = docker.build(env.BACKEND_IMAGE, '-f backend/dockerfile backend')
-                    def frontendImg = docker.build(env.FRONTEND_IMAGE, '-f frontend/dockerfile frontend')
-
-                    if (env.PUSH_TO_REGISTRY == 'true') {
-                        docker.withRegistry(env.REGISTRY, env.REGISTRY_CRED) {
-                            backendImg.push()
-                            frontendImg.push()
-
-                            if (params.IMAGE_TAG != 'latest') {
-                                docker.image(env.BACKEND_IMAGE).push('latest')
-                                docker.image(env.FRONTEND_IMAGE).push('latest')
-                            }
-                        }
-                    } else {
-                        echo 'Skipping Docker Hub push because DOCKERHUB_NAMESPACE is blank.'
-                    }
-                }
-            }
-        }
-
-        stage('Terraform + Ansible') {
+        stage('Deploy Backend') {
             steps {
                 withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
                     sh '''
-                        if [ ! -f terraform/main.tf ]; then
-                          echo 'No terraform/main.tf found in this repository.'
-                          exit 1
-                        fi
-
-                        export TF_PLUGIN_CACHE_DIR="/workspace/terraform/.terraform.d/plugin-cache"
-                        export TF_DATA_DIR="/workspace/terraform/.terraform-run"
-                        mkdir -p terraform/.terraform.d/plugin-cache terraform/.terraform-run
-                        cp "$KUBECONFIG" .kubeconfig
-
-                        docker run --rm \
-                            --user "$(id -u):$(id -g)" \
-                            -v "$PWD:/workspace" \
-                            -w /workspace/terraform \
-                            -e TF_IN_AUTOMATION="${TF_IN_AUTOMATION}" \
-                            -e TF_PLUGIN_CACHE_DIR="$TF_PLUGIN_CACHE_DIR" \
-                            -e TF_DATA_DIR="$TF_DATA_DIR" \
-                            -e K8S_NAMESPACE="${K8S_NAMESPACE}" \
-                            -e KUBECONFIG="/workspace/.kubeconfig" \
-                            -e BACKEND_IMAGE="${BACKEND_IMAGE}" \
-                            -e FRONTEND_IMAGE="${FRONTEND_IMAGE}" \
-                            hashicorp/terraform:1.9.8 sh -eu -c '
-                                terraform init
-                                terraform import -input=false \
-                                    -var="namespace=$K8S_NAMESPACE" \
-                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                    -var="backend_image=$BACKEND_IMAGE" \
-                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                    kubernetes_namespace_v1.app "$K8S_NAMESPACE" || true
-                                terraform import -input=false \
-                                    -var="namespace=$K8S_NAMESPACE" \
-                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                    -var="backend_image=$BACKEND_IMAGE" \
-                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                    kubernetes_config_map_v1.app "$K8S_NAMESPACE/eldenring-config" || true
-                                terraform import -input=false \
-                                    -var="namespace=$K8S_NAMESPACE" \
-                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                    -var="backend_image=$BACKEND_IMAGE" \
-                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                    kubernetes_secret_v1.app "$K8S_NAMESPACE/eldenring-secrets" || true
-                                terraform import -input=false \
-                                    -var="namespace=$K8S_NAMESPACE" \
-                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                    -var="backend_image=$BACKEND_IMAGE" \
-                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                    kubernetes_service_v1.postgres "$K8S_NAMESPACE/postgres-svc" || true
-                                terraform import -input=false \
-                                    -var="namespace=$K8S_NAMESPACE" \
-                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                    -var="backend_image=$BACKEND_IMAGE" \
-                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                    kubernetes_stateful_set_v1.postgres "$K8S_NAMESPACE/postgres" || true
-                                terraform import -input=false \
-                                    -var="namespace=$K8S_NAMESPACE" \
-                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                    -var="backend_image=$BACKEND_IMAGE" \
-                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                    kubernetes_deployment_v1.backend "$K8S_NAMESPACE/eldenring-backend" || true
-                                terraform import -input=false \
-                                    -var="namespace=$K8S_NAMESPACE" \
-                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                    -var="backend_image=$BACKEND_IMAGE" \
-                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                    kubernetes_service_v1.backend "$K8S_NAMESPACE/eldenring-backend-svc" || true
-                                terraform import -input=false \
-                                    -var="namespace=$K8S_NAMESPACE" \
-                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                    -var="backend_image=$BACKEND_IMAGE" \
-                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                    kubernetes_deployment_v1.frontend "$K8S_NAMESPACE/eldenring-frontend" || true
-                                terraform import -input=false \
-                                    -var="namespace=$K8S_NAMESPACE" \
-                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                    -var="backend_image=$BACKEND_IMAGE" \
-                                    -var="frontend_image=$FRONTEND_IMAGE" \
-                                    kubernetes_service_v1.frontend "$K8S_NAMESPACE/eldenring-frontend-svc" || true
-                                terraform apply -auto-approve \
-                                    -var="namespace=$K8S_NAMESPACE" \
-                                    -var="kubeconfig_path=$KUBECONFIG" \
-                                    -var="backend_image=$BACKEND_IMAGE" \
-                                    -var="frontend_image=$FRONTEND_IMAGE"
-                            '
-
-                        rm -f .kubeconfig
-                        rm -rf terraform/.terraform terraform/.terraform-run terraform/.terraform.d
+                        echo "Deploy Backend to Kubernetes Cluster..."
+                        python3 -m venv /tmp/ansible-venv
+                        . /tmp/ansible-venv/bin/activate
+                        pip install -q ansible
+                        ansible-playbook \
+                          -i ansible/backend/hosts.ini \
+                          ansible/backend/deploy_backend.yml \
+                          --extra-vars "backend_image=${BACKEND_IMAGE} kube_namespace=${K8S_NAMESPACE} version=${IMAGE_TAG}"
                     '''
                 }
             }
         }
 
-        stage('Kubernetes Deploy') {
-            stages {
-                stage('Deploy Backend') {
-                    steps {
-                        withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
-                            sh '''
-                                ansible-playbook \
-                                  -i ansible/backend/hosts.ini \
-                                  ansible/backend/deploy_backend.yml \
-                                  --extra-vars "backend_image=${BACKEND_IMAGE} kube_namespace=${K8S_NAMESPACE}"
-                            '''
-                        }
-                    }
+        stage('Deploy Frontend') {
+            steps {
+                withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
+                    sh '''
+                        echo "Deploy Frontend to Kubernetes Cluster..."
+                        python3 -m venv /tmp/ansible-venv
+                        . /tmp/ansible-venv/bin/activate
+                        pip install -q ansible
+                        ansible-playbook \
+                          -i ansible/frontend/hosts.ini \
+                          ansible/frontend/deploy_frontend.yml \
+                          --extra-vars "frontend_image=${FRONTEND_IMAGE} kube_namespace=${K8S_NAMESPACE} version=${IMAGE_TAG}"
+                    '''
                 }
+            }
+        }
 
-                stage('Deploy Frontend') {
-                    steps {
-                        withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
-                            sh '''
-                                ansible-playbook \
-                                  -i ansible/frontend/hosts.ini \
-                                  ansible/frontend/deploy_frontend.yml \
-                                  --extra-vars "frontend_image=${FRONTEND_IMAGE} kube_namespace=${K8S_NAMESPACE}"
-                            '''
-                        }
-                    }
-                }
+        stage('Cleanup') {
+            steps {
+                sh '''
+                    if [ -d terraform/.terraform ]; then
+                        chmod -R u+w terraform/.terraform || true
+                        rm -rf terraform/.terraform || true
+                    fi
+
+                    rm -rf terraform/.terraform-run terraform/.terraform.d .kubeconfig || true
+                '''
+                deleteDir()
             }
         }
     }
 
     post {
         always {
-                        sh '''
-                                if [ -d terraform/.terraform ]; then
-                                    chmod -R u+w terraform/.terraform || true
-                                    rm -rf terraform/.terraform || true
-                                fi
-
-                                rm -rf terraform/.terraform-run terraform/.terraform.d .kubeconfig || true
-                        '''
-                        deleteDir()
+            sh '''
+                rm -rf terraform/.terraform-run terraform/.terraform.d .kubeconfig || true
+            '''
         }
     }
 

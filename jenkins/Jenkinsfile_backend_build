@@ -97,10 +97,43 @@ EOF
             }
             steps {
                 script {
-                    docker.withRegistry(env.REGISTRY, REGISTRY_CRED) {
-                        def backendImg = docker.build("${IMAGE_NAME}:${IMAGE_TAG}", '-f backend/dockerfile backend')
-                        backendImg.push()
-                        backendImg.push('latest')
+                    def workspaceDir = pwd().trim()
+                    def backendImageRef = "${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+                    def backendContext = "${workspaceDir}/backend"
+                    withCredentials([usernamePassword(credentialsId: REGISTRY_CRED, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                        writeFile file: 'backend_image.py', text: """import os
+import subprocess
+
+backend_image_ref = ${groovy.json.JsonOutput.toJson(backendImageRef)}.strip()
+backend_context = ${groovy.json.JsonOutput.toJson(backendContext)}.strip()
+latest_image_ref = ${groovy.json.JsonOutput.toJson(env.IMAGE_NAME + ':latest')}.strip()
+registry = os.environ['REGISTRY'].strip()
+docker_username = os.environ['DOCKER_USERNAME']
+docker_password = os.environ['DOCKER_PASSWORD']
+
+
+subprocess.run([
+    'docker', 'run', '--rm',
+    '-v', '/var/run/docker.sock:/var/run/docker.sock',
+    '-v', f'{backend_context}:/context',
+    '-w', '/context',
+    '-e', f'DOCKER_USERNAME={docker_username}',
+    '-e', f'DOCKER_PASSWORD={docker_password}',
+    '-e', f'REGISTRY={registry}',
+    '-e', f'IMAGE_REF={backend_image_ref}',
+    '-e', f'LATEST_IMAGE_REF={latest_image_ref}',
+    'docker:27-cli',
+    'sh', '-eu', '-c',
+    'printf "%s" "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin "$REGISTRY"; '
+    'docker build -t "$IMAGE_REF" -f dockerfile .; '
+    'docker push "$IMAGE_REF"; '
+    'docker tag "$IMAGE_REF" "$LATEST_IMAGE_REF"; '
+    'docker push "$LATEST_IMAGE_REF"; '
+    'docker logout "$REGISTRY" || true',
+    'docker-build-wrapper'
+], check=True)
+""".replace('\r', '')
+                        sh 'python3 backend_image.py'
                     }
                 }
             }
