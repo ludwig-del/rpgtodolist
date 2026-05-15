@@ -46,8 +46,8 @@ EOF
 
                         git remote remove origin 2>/dev/null || true
                         git remote add origin https://github.com/ludwig-del/rpgtodolist.git
-                            git reset --hard HEAD 2>/dev/null || true
-                            git clean -fdx
+                        git reset --hard HEAD 2>/dev/null || true
+                        git clean -fdx
                         git fetch --prune origin +refs/heads/sun:refs/remotes/origin/sun
                         git checkout -B sun refs/remotes/origin/sun
                         git reset --hard refs/remotes/origin/sun
@@ -80,19 +80,19 @@ EOF
                         -e HOME=/tmp \
                         -v "$PWD:/workspace" \
                         -w /workspace/backend \
-                        python:3.12-slim sh -lc '
-                            python -m venv /tmp/venv
-                            . /tmp/venv/bin/activate
-                            pip install -q -r requirements.txt pytest pytest-cov
-                            pytest tests/ -v --tb=short --junitxml=test-results.xml \
-                                   --cov=app --cov-report=xml:coverage.xml
-                        '
+                        python:3.12-slim sh -eu -c "python -m venv /tmp/venv && . /tmp/venv/bin/activate && pip install -q -r requirements.txt pytest pytest-cov && pytest tests/ -v --tb=short --junitxml=test-results.xml --cov=app --cov-report=xml:coverage.xml"
                 '''
             }
             post {
                 always {
                     junit allowEmptyResults: true, testResults: 'backend/test-results.xml'
-                                    python:3.12-slim sh -eu -c ". /etc/os-release >/dev/null 2>&1 || true; python -m venv /tmp/venv && . /tmp/venv/bin/activate && pip install -q -r requirements.txt pytest pytest-cov && pytest tests/ -v --tb=short --junitxml=test-results.xml --cov=app --cov-report=xml:coverage.xml"
+                    archiveArtifacts artifacts: 'backend/coverage.xml', fingerprint: true, onlyIfSuccessful: false
+                }
+            }
+        }
+
+        stage('Build & Push Backend Image') {
+            when {
                 expression { params.PUSH_IMAGE }
             }
             steps {
