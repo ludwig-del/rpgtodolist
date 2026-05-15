@@ -84,6 +84,35 @@ Developer
 
 ## 📁 โครงสร้าง Repository
 
+### Architecture Diagram
+```text
+Developer
+    │
+    ▼  git push
+ GitHub ───────────────▶ Jenkins CI/CD
+                            │
+                ┌───────────┼───────────────┐
+                ▼           ▼               ▼
+         Backend Build  Frontend Build   Deploy Pipeline
+                │           │               │
+                └─────── Docker Images ─────┘
+                                        │
+                                        ▼
+                             Terraform + Ansible
+                                        │
+                                        ▼
+                               Kubernetes Cluster
+                       ┌─────────────────────────────────┐
+                       │  Postgres StatefulSet           │
+                       │  Backend Deployment (2 pods)    │
+                       │  Frontend Deployment (2 pods)   │
+                       │  Services exposed by NodePort   │
+                       └─────────────────────────────────┘
+                                        │
+                        ┌───────────────┴───────────────┐
+                        ▼                               ▼
+                   Prometheus                        Grafana
+                  (scrape /metrics)            (dashboard panels)
 ```
 rpgtodolist/
 ├── backend/
@@ -212,8 +241,32 @@ frontend/public/assets/audio/    ← boss themes (.mp3)
            (เพลง: ชื่อเดียวกัน + _theme.mp3)
 ```
 ```bash
-docker compose up --build
+cd terraform
+terraform init
+terraform plan
+terraform apply
 ```
+
+Terraform provisions:
+- Kubernetes namespace
+- ConfigMap and Secret
+- PostgreSQL service and StatefulSet
+- Backend deployment and service
+- Frontend deployment and service
+
+### Ansible — Deploy Application Changes
+```bash
+ansible-playbook -i ansible/backend/hosts.ini ansible/backend/deploy_backend.yml
+ansible-playbook -i ansible/frontend/hosts.ini ansible/frontend/deploy_frontend.yml
+```
+
+Ansible performs:
+- rollout readiness check for Postgres and existing deployments
+- backend image patch for container and initContainer
+- frontend image update
+- rollout status verification for both services
+
+> In the actual Jenkins deploy pipeline, Terraform and Ansible are executed automatically. They do not need to be run manually during normal CI/CD flow.
 
 ---
 
@@ -288,8 +341,8 @@ ansible-playbook -i inventory.ini playbook.yml \
 
 ### 1. Start Minikube
 ```bash
-minikube start --driver=docker --cpus=2 --memory=4096
-minikube status
+kubectl apply -f k8s/backend-deployment.yaml
+kubectl apply -f k8s/frontend-deployment.yaml
 ```
 
 ### 2. Apply Manifests

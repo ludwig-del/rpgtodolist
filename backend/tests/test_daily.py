@@ -26,6 +26,9 @@ def test_select_boss_creates_session(client, auth_headers):
 
 def test_cannot_select_boss_twice(client, auth_headers):
     bosses = client.get("/api/daily/bosses").get_json()
+    client.post("/api/daily/select-boss",
+                json={"boss_id": bosses[1]["id"]},
+                headers=auth_headers)
     resp = client.post("/api/daily/select-boss",
                        json={"boss_id": bosses[1]["id"]},
                        headers=auth_headers)
