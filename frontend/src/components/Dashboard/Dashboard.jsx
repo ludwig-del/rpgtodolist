@@ -101,7 +101,7 @@ export default function Dashboard() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, type: 'spring' }}
             >
-              <h2 className="dashboard__victory-title">GREAT ENEMY FELLED</h2>
+              <h2 className="dashboard__victory-title">GREAT ENEMY</h2>
               <p className="dashboard__victory-xp">
                 +{session.boss?.difficulty_order} XP earned — Stage {session.boss?.difficulty_order}
               </p>
