@@ -1,6 +1,6 @@
 .dashboard {
   min-height: 100vh;
-  background: radial-gradient(ellipse at 50% 0%, #180d02 0%, var(--bg-deep) 60%);
+  background: radial-gradient(ellipse at 50% 0%, #ececec 0%, var(--bg-deep) 60%);
   padding: 2rem 1.5rem 4rem;
   display: flex;
   flex-direction: column;
